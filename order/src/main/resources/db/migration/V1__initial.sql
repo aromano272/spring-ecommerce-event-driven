@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS orders
+(
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id INT NOT NULL,
+    state TEXT NOT NULL,
+    products JSONB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
