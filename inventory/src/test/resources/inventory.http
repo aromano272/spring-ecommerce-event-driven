@@ -1,0 +1,20 @@
+### Create product
+POST http://localhost:8083/inventory
+Content-Type: application/json
+
+### Get all products
+GET http://localhost:8083/inventory/all
+Content-Type: application/json
+
+### Get product by id
+GET http://localhost:8083/inventory/2
+Content-Type: application/json
+
+### Increment inventory
+POST http://localhost:8083/inventory/2/incrementInventory?amount=100
+Content-Type: application/json
+
+### Decrement inventory
+POST http://localhost:8083/inventory/2/decrementInventory?amount=80
+Content-Type: application/json
+

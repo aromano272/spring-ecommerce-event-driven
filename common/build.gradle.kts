@@ -24,6 +24,17 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.springframework.kafka:spring-kafka")
     implementation("org.springframework.boot:spring-boot-starter-web")
+
+    implementation(libs.jdbi.core)
+    implementation(libs.jdbi.kotlin)
+    implementation(libs.jdbi.sqlobject)
+    implementation(libs.jdbi.jackson2)
+    implementation(libs.jackson.kotlin)
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.database.postgresql)
+
+    implementation(libs.spring.boot.jdbc)
+
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -34,6 +45,7 @@ dependencies {
     testImplementation("org.testcontainers:kafka")
     testImplementation("org.testcontainers:postgresql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
 }
 
 kotlin {

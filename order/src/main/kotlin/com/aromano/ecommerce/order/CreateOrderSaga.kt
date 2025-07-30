@@ -3,12 +3,17 @@ package com.aromano.ecommerce.order
 import com.aromano.ecommerce.common.Cents
 import com.aromano.ecommerce.order.domain.Product
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult.completed
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationRegistry
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.RecordMetadata
 import org.slf4j.LoggerFactory
-import org.springframework.kafka.annotation.KafkaListener
+import org.springframework.context.annotation.Bean
 import org.springframework.kafka.core.KafkaTemplate
-import org.springframework.messaging.handler.annotation.Payload
+import org.springframework.kafka.support.LoggingProducerListener
+import org.springframework.kafka.support.ProducerListener
 import org.springframework.stereotype.Component
+import java.lang.Exception
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import kotlin.jvm.java
@@ -33,6 +38,14 @@ data class CreateOrderSagaResult(
 )
 
 @Component
+class CreateOrderSagaFactory(
+    private val kafkaTemplate: KafkaTemplate<String, Any>,
+    private val orderService: OrderService,
+    private val objectMapper: ObjectMapper,
+) {
+    fun create(): CreateOrderSaga = CreateOrderSaga(kafkaTemplate, orderService, objectMapper)
+}
+
 class CreateOrderSaga(
     private val kafkaTemplate: KafkaTemplate<String, Any>,
     private val orderService: OrderService,
@@ -41,6 +54,25 @@ class CreateOrderSaga(
 
     private val logger = LoggerFactory.getLogger(CreateOrderSaga::class.java)
 
+    init {
+        kafkaTemplate.setProducerListener(object : ProducerListener<String, Any> {
+            override fun onSuccess(
+                producerRecord: ProducerRecord<String?, in Any>?,
+                recordMetadata: RecordMetadata?
+            ) {
+                logger.info("Event success: key: ${producerRecord?.key()}, value: ${producerRecord?.value()}")
+            }
+
+            override fun onError(
+                producerRecord: ProducerRecord<String?, in Any>?,
+                recordMetadata: RecordMetadata?,
+                exception: Exception?
+            ) {
+                logger.info("Event success: key: ${producerRecord?.key()}, value: ${producerRecord?.value()}, ex: $exception")
+            }
+        })
+    }
+
     private enum class Step {
         CREATE_ORDER,
         DECREMENT_INVENTORY,
@@ -48,7 +80,7 @@ class CreateOrderSaga(
         COMPLETE_ORDER_CREATION,
     }
 
-    override val uuid: UUID = UUID.randomUUID()
+    override val uuid: String = UUID.randomUUID().toString()
 
     private var userId by Delegates.notNull<Int>()
     private lateinit var products: List<Product>
@@ -70,6 +102,7 @@ class CreateOrderSaga(
     //      late start, does it replay missed events?)
 
     override fun start(args: CreateOrderSagaArgs): CompletableFuture<CreateOrderSagaResult> {
+        logger.info("start UUID: $uuid")
         this.userId = args.userId
         this.products = args.products
         run()
@@ -78,10 +111,11 @@ class CreateOrderSaga(
 
     private fun run() {
         if (completed) return
-        logger.info("run() currStep: $currStep")
+        logger.info("$uuid run() currStep: $currStep")
         when (currStep) {
             Step.CREATE_ORDER -> {
                 orderId = orderService.createOrder(userId, products)
+                logger.info("$uuid run() orderId: $orderId")
                 currStepIdx++
                 run()
             }
@@ -90,6 +124,7 @@ class CreateOrderSaga(
                 "inventory-commands",
                 orderId.toString(),
                 DecrementInventoryCommand(
+                    sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
                     productIds = products.map { it.id },
@@ -100,6 +135,7 @@ class CreateOrderSaga(
                 "customer-commands",
                 orderId.toString(),
                 DecrementBalanceCommand(
+                    sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
                     amount = products.sumOf { it.price },
@@ -116,13 +152,20 @@ class CreateOrderSaga(
     }
 
     fun rollback() {
-        if (completed) return
+        currStepIdx--
+        if (currStepIdx < 0) {
+            completed = true
+            onComplete.completeExceptionally(RuntimeException(error))
+            return
+        }
+        logger.info("$uuid rollback() currStep: $currStep")
         when (currStep) {
             Step.CREATE_ORDER -> orderService.rejectOrder(orderId)
             Step.DECREMENT_INVENTORY -> kafkaTemplate.send(
                 "inventory-commands",
                 orderId.toString(),
                 RollbackDecrementInventoryCommand(
+                    sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
                     productIds = products.map { it.id },
@@ -132,6 +175,7 @@ class CreateOrderSaga(
                 "customer-commands",
                 orderId.toString(),
                 RollbackDecrementBalanceCommand(
+                    sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
                     amount = products.sumOf { it.price },
@@ -139,60 +183,35 @@ class CreateOrderSaga(
             )
             Step.COMPLETE_ORDER_CREATION -> {}
         }
-        if (currStep == Step.entries.first()) {
-            completed = true
-            onComplete.completeExceptionally(RuntimeException(error))
-        }
-        currStepIdx--
         rollback()
     }
 
-    @KafkaListener(topics = ["inventory-events"], groupId = "create-order-saga")
-    fun handleInventoryEvents(@Payload payload: String) {
-        if (currStep != Step.DECREMENT_INVENTORY) return
-        logger.info("handleInventoryEvents payload: $payload")
-        val event: KafkaEvent = objectMapper.toValue(
-            payload,
-            InventoryDecrementSuccess::class,
-            InventoryDecrementFailed::class,
-        ) ?: return
-
+    override fun handleEvent(event: KafkaEvent) {
         when (event) {
-            is InventoryDecrementSuccess -> if (event.orderId != orderId) return
-            is InventoryDecrementFailed -> if (event.orderId != orderId) {
-                return
-            } else {
+            is InventoryDecrementSuccess -> {
+                if (currStep != Step.DECREMENT_INVENTORY) return
+                if (event.orderId != orderId) return
+            }
+            is InventoryDecrementFailed -> {
+                if (currStep != Step.DECREMENT_INVENTORY) return
+                if (event.orderId != orderId) return
                 error = "InventoryDecrementFailed"
                 rollback()
                 return
             }
-        }
-
-        currStepIdx++
-        run()
-    }
-
-    @KafkaListener(topics = ["customer-events"], groupId = "create-order-saga")
-    fun handleCustomerEvents(@Payload payload: String) {
-        if (currStep != Step.DECREMENT_BALANCE) return
-        logger.info("handleCustomerEvents payload: $payload")
-        val event: KafkaEvent = objectMapper.toValue(
-            payload,
-            BalanceDecrementSuccess::class,
-            BalanceDecrementFailed::class,
-        ) ?: return
-
-        when (event) {
-            is BalanceDecrementSuccess -> if (event.orderId != orderId) return
-            is BalanceDecrementFailed -> if (event.orderId != orderId) {
-                return
-            } else {
+            is BalanceDecrementSuccess -> {
+                if (currStep != Step.DECREMENT_BALANCE) return
+                if (event.orderId != orderId) return
+            }
+            is BalanceDecrementFailed -> {
+                if (currStep != Step.DECREMENT_BALANCE) return
+                if (event.orderId != orderId) return
                 error = "BalanceDecrementFailed"
                 rollback()
                 return
             }
+            else -> return
         }
-
         currStepIdx++
         run()
     }
@@ -217,47 +236,56 @@ fun ObjectMapper.toValue(payload: String, vararg events: KClass<*>): KafkaEvent?
 }
 
 abstract class KafkaEvent {
+    abstract val sagaId: String
     val eventType: String = this::class.simpleName.orEmpty()
 }
 
 data class DecrementInventoryCommand(
+    override val sagaId: String,
     val orderId: Int,
     val userId: Int,
     val productIds: List<Int>,
 ) : KafkaEvent()
 
 data class RollbackDecrementInventoryCommand(
+    override val sagaId: String,
     val orderId: Int,
     val userId: Int,
     val productIds: List<Int>,
 ) : KafkaEvent()
 
 data class InventoryDecrementSuccess(
+    override val sagaId: String,
     val orderId: Int,
 ) : KafkaEvent()
 
 data class InventoryDecrementFailed(
+    override val sagaId: String,
     val orderId: Int,
     val error: String,
 ) : KafkaEvent()
 
 data class DecrementBalanceCommand(
+    override val sagaId: String,
     val orderId: Int,
     val userId: Int,
     val amount: Cents,
 ) : KafkaEvent()
 
 data class RollbackDecrementBalanceCommand(
+    override val sagaId: String,
     val orderId: Int,
     val userId: Int,
     val amount: Cents,
 ) : KafkaEvent()
 
 data class BalanceDecrementSuccess(
+    override val sagaId: String,
     val orderId: Int,
 ) : KafkaEvent()
 
 data class BalanceDecrementFailed(
+    override val sagaId: String,
     val orderId: Int,
     val error: String,
 ) : KafkaEvent()

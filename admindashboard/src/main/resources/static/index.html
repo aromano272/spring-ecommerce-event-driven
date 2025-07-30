@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .input-container {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        label {
+            min-width: 100px;
+            font-weight: bold;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            flex-grow: 1;
+        }
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-align: left;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>E-Commerce Admin Dashboard</h1>
+
+    <div class="input-container">
+        <div class="input-group">
+            <label for="sagaId">Saga ID:</label>
+            <input type="text" id="sagaId" placeholder="Enter UUID for saga" value="">
+        </div>
+        <div class="input-group">
+            <label for="orderId">Order ID:</label>
+            <input type="text" id="orderId" placeholder="Will be populated after creating an order">
+        </div>
+    </div>
+
+    <div class="button-container">
+        <button id="createOrder">Create Order</button>
+        <button id="getOrder" disabled>Get Order</button>
+        <button id="inventoryDecrementSuccess" disabled>Decrement Inventory Success</button>
+        <button id="balanceDecrementSuccess" disabled>Decrement Balance Success</button>
+        <button id="inventoryDecrementFailed" disabled>Decrement Inventory Failed</button>
+        <button id="balanceDecrementFailed" disabled>Decrement Balance Failed</button>
+    </div>
+
+    <div id="response">
+        <p>Response will appear here...</p>
+    </div>
+
+    <script>
+        // Function to update event buttons state
+        function updateButtonsState() {
+            const orderId = document.getElementById('orderId').value;
+            const sagaId = document.getElementById('sagaId').value;
+            const hasOrderId = orderId && orderId !== '';
+            const hasSagaId = sagaId && sagaId !== '';
+
+            // Enable/disable getOrder button based on orderId only
+            document.getElementById('getOrder').disabled = !hasOrderId;
+
+            const buttons = [
+                'inventoryDecrementSuccess',
+                'balanceDecrementSuccess',
+                'inventoryDecrementFailed',
+                'balanceDecrementFailed'
+            ];
+
+            buttons.forEach(buttonId => {
+                document.getElementById(buttonId).disabled = !(hasOrderId && hasSagaId);
+            });
+        }
+
+        // Add event listeners for input changes
+        document.getElementById('sagaId').addEventListener('input', updateButtonsState);
+        document.getElementById('orderId').addEventListener('input', updateButtonsState);
+
+        // Create Order button
+        document.getElementById('createOrder').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/order/create?userId=1', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                appendToLog(`Button: Create Order\n${JSON.stringify(data)}`);
+
+                // Extract orderId from response
+                document.getElementById('orderId').value = data.id;
+                updateButtonsState();
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Inventory Decrement Success button
+        document.getElementById('inventoryDecrementSuccess').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                const sagaId = document.getElementById('sagaId').value;
+
+                const response = await fetch(`/api/events/inventory-decrement-success?orderId=${orderId}&sagaId=${sagaId}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Inventory Decrement Success, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Balance Decrement Success button
+        document.getElementById('balanceDecrementSuccess').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                const sagaId = document.getElementById('sagaId').value;
+
+                const response = await fetch(`/api/events/balance-decrement-success?orderId=${orderId}&sagaId=${sagaId}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Balance Decrement Success, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Inventory Decrement Failed button
+        document.getElementById('inventoryDecrementFailed').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                const sagaId = document.getElementById('sagaId').value;
+
+                const response = await fetch(`/api/events/inventory-decrement-failed?orderId=${orderId}&sagaId=${sagaId}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Inventory Decrement Failed, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Balance Decrement Failed button
+        document.getElementById('balanceDecrementFailed').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                const sagaId = document.getElementById('sagaId').value;
+
+                const response = await fetch(`/api/events/balance-decrement-failed?orderId=${orderId}&sagaId=${sagaId}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Balance Decrement Failed, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Get Order button
+        document.getElementById('getOrder').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+
+                const response = await fetch(`/api/order/get?orderId=${orderId}`, {
+                    method: 'GET'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Get Order, OrderID: ${orderId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Function to append to the log instead of replacing content
+        function appendToLog(message) {
+            const responseDiv = document.getElementById('response');
+            const currentContent = responseDiv.innerHTML;
+
+            // If it's the initial placeholder text, replace it
+            if (currentContent.includes('Response will appear here...')) {
+                responseDiv.innerHTML = `<pre>${message}</pre>`;
+            } else {
+                // Otherwise append with a separator
+                responseDiv.innerHTML = `${currentContent}<hr><pre>${message}</pre>`;
+            }
+
+            // Scroll to the bottom of the response div
+            responseDiv.scrollTop = responseDiv.scrollHeight;
+        }
+
+        updateButtonsState();
+    </script>
+</body>
+</html>

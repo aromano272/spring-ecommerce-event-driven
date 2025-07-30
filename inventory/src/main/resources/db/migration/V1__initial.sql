@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS products
+(
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name TEXT NOT NULL,
+    price INT NOT NULL,
+    inventory INT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
+);

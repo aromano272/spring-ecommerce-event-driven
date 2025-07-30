@@ -1,7 +1,7 @@
-package com.aromano.ecommerce.order.config
+package com.aromano.ecommerce.inventory.config
 
 import com.aromano.ecommerce.common.config.BaseJdbiConfig
-import com.aromano.ecommerce.order.OrderDao
+import com.aromano.ecommerce.inventory.InventoryDao
 import org.jdbi.v3.core.Jdbi
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -11,8 +11,8 @@ import kotlin.jvm.java
 class JdbiConfig : BaseJdbiConfig() {
 
     @Bean
-    fun orderDao(jdbi: Jdbi): OrderDao {
-        return jdbi.onDemand(OrderDao::class.java)
+    fun inventoryDao(jdbi: Jdbi): InventoryDao {
+        return jdbi.onDemand(InventoryDao::class.java)
     }
 
 }
