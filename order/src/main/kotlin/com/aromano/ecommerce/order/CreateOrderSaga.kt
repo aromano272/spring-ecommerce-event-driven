@@ -73,8 +73,9 @@ class CreateOrderSaga(
     private enum class Step {
         CREATE_ORDER,
         RESERVE_INVENTORY,
-        DECREMENT_BALANCE,
+        RESERVE_BALANCE,
         SUBMIT_RESERVED_INVENTORY,
+        SUBMIT_RESERVED_BALANCE,
         COMPLETE_ORDER_CREATION,
     }
 
@@ -82,6 +83,7 @@ class CreateOrderSaga(
 
     private var userId by Delegates.notNull<Int>()
     private lateinit var products: List<Product>
+    private var totalCost by Delegates.notNull<Int>()
     private var orderId by Delegates.notNull<Int>()
     private var completed = false
     private lateinit var error: String
@@ -129,14 +131,14 @@ class CreateOrderSaga(
                 )
             )
 
-            Step.DECREMENT_BALANCE -> kafkaTemplate.send(
+            Step.RESERVE_BALANCE -> kafkaTemplate.send(
                 "customer-commands",
                 orderId.toString(),
-                DecrementBalanceCommand(
+                ReserveBalanceCommand(
                     sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
-                    amount = products.sumOf { it.price },
+                    amount = totalCost,
                 )
             )
 
@@ -147,6 +149,17 @@ class CreateOrderSaga(
                     sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
+                )
+            )
+
+            Step.SUBMIT_RESERVED_BALANCE -> kafkaTemplate.send(
+                "customer-commands",
+                orderId.toString(),
+                SubmitReservedBalanceCommand(
+                    sagaId = uuid,
+                    orderId = orderId,
+                    userId = userId,
+                    amount = totalCost,
                 )
             )
 
@@ -179,10 +192,10 @@ class CreateOrderSaga(
                     productIds = products.map { it.id },
                 )
             )
-            Step.DECREMENT_BALANCE -> kafkaTemplate.send(
+            Step.RESERVE_BALANCE -> kafkaTemplate.send(
                 "customer-commands",
                 orderId.toString(),
-                RollbackDecrementBalanceCommand(
+                RollbackReserveBalanceCommand(
                     sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
@@ -191,6 +204,7 @@ class CreateOrderSaga(
             )
             // TODO(aromano): considering these steps as "unfailable", will need to revisit later
             Step.SUBMIT_RESERVED_INVENTORY,
+            Step.SUBMIT_RESERVED_BALANCE,
             Step.COMPLETE_ORDER_CREATION -> {}
         }
         rollback()
@@ -201,6 +215,7 @@ class CreateOrderSaga(
             is ReserveInventorySuccess -> {
                 if (currStep != Step.RESERVE_INVENTORY) return
                 if (event.orderId != orderId) return
+                totalCost = event.totalCost
             }
             is ReserveInventoryFailed -> {
                 if (currStep != Step.RESERVE_INVENTORY) return
@@ -209,14 +224,14 @@ class CreateOrderSaga(
                 rollback()
                 return
             }
-            is BalanceDecrementSuccess -> {
-                if (currStep != Step.DECREMENT_BALANCE) return
+            is ReserveBalanceSuccess -> {
+                if (currStep != Step.RESERVE_BALANCE) return
                 if (event.orderId != orderId) return
             }
-            is BalanceDecrementFailed -> {
-                if (currStep != Step.DECREMENT_BALANCE) return
+            is ReserveBalanceFailed -> {
+                if (currStep != Step.RESERVE_BALANCE) return
                 if (event.orderId != orderId) return
-                error = "BalanceDecrementFailed"
+                error = "ReserveBalanceFailed"
                 rollback()
                 return
             }
@@ -264,7 +279,14 @@ data class ReserveInventoryCommand(
     val product: List<Product>,
 ) : KafkaEvent()
 
-data class DecrementBalanceCommand(
+data class ReserveBalanceCommand(
+    override val sagaId: String,
+    val orderId: Int,
+    val userId: Int,
+    val amount: Cents,
+) : KafkaEvent()
+
+data class SubmitReservedBalanceCommand(
     override val sagaId: String,
     val orderId: Int,
     val userId: Int,
@@ -318,19 +340,41 @@ data class ReleasedReservedInventoryFailed(
     val error: String,
 ) : KafkaEvent()
 
-data class RollbackDecrementBalanceCommand(
+data class RollbackReserveBalanceCommand(
     override val sagaId: String,
     val orderId: Int,
     val userId: Int,
     val amount: Cents,
 ) : KafkaEvent()
 
-data class BalanceDecrementSuccess(
+data class ReserveBalanceSuccess(
     override val sagaId: String,
     val orderId: Int,
 ) : KafkaEvent()
 
-data class BalanceDecrementFailed(
+data class ReserveBalanceFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String,
+) : KafkaEvent()
+
+data class SubmitReservedBalanceSuccess(
+    override val sagaId: String,
+    val orderId: Int,
+) : KafkaEvent()
+
+data class SubmitReservedBalanceFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String,
+) : KafkaEvent()
+
+data class ReleasedReservedBalanceSuccess(
+    override val sagaId: String,
+    val orderId: Int,
+) : KafkaEvent()
+
+data class ReleasedReservedBalanceFailed(
     override val sagaId: String,
     val orderId: Int,
     val error: String,

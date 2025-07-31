@@ -59,7 +59,7 @@ interface InventoryDao {
         @Bind("quantity") quantity: Int,
     )
 
-    @SqlUpdate("DELETE FROM reserved_products WHERE user_id = :userId AND order_id = :orderId")
+    @SqlUpdate("DELETE FROM reserved_products WHERE userId = :userId AND orderId = :orderId")
     fun deleteReservedInventoryForOrder(
         @Bind("userId") userId: Int,
         @Bind("orderId") orderId: Int,

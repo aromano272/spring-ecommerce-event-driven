@@ -17,7 +17,7 @@ import org.springframework.stereotype.Repository
 interface OrderDao {
 
     @SqlUpdate("""
-        INSERT INTO orders (user_id, state, products)
+        INSERT INTO orders (userId, state, products)
         VALUES (:userId, :state, :products :: jsonb)
     """)
     @GetGeneratedKeys

@@ -1,5 +1,6 @@
 package com.aromano.ecommerce.order
 
+import com.aromano.ecommerce.common.domain.UnhandledEventException
 import com.aromano.ecommerce.order.ReleasedReservedInventoryFailed
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
@@ -69,10 +70,7 @@ class SagaRunner(
             ReleasedReservedInventoryFailed::class,
         ) ?: return
 
-        when (event) {
-            is ReserveInventorySuccess,
-            is ReserveInventoryFailed -> mem[event.sagaId]?.handleEvent(event)
-        }
+        mem[event.sagaId]?.handleEvent(event)
     }
 
     @KafkaListener(topics = ["customer-events"], groupId = "saga-runner")
@@ -81,14 +79,11 @@ class SagaRunner(
         logger.info("handleCustomerEvents payload: $payload")
         val event: KafkaEvent = objectMapper.toValue(
             payload,
-            BalanceDecrementSuccess::class,
-            BalanceDecrementFailed::class,
+            ReserveBalanceSuccess::class,
+            ReserveBalanceFailed::class,
         ) ?: return
 
-        when (event) {
-            is BalanceDecrementSuccess,
-            is BalanceDecrementFailed -> mem[event.sagaId]?.handleEvent(event)
-        }
+        mem[event.sagaId]?.handleEvent(event)
     }
 
 }

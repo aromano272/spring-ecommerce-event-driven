@@ -27,7 +27,7 @@ class InventoryService(
     }
 
     fun decrementInventory(id: Int, amount: Cents) {
-        dao.decrementInventoryIfPossibleTx(id, amount)
+        dao.decrementInventory(id, amount)
     }
 
     fun reserveInventoryForOrder(event: ReserveInventoryCommand) {

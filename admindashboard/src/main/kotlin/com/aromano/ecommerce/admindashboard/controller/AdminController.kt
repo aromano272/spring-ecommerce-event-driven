@@ -1,7 +1,7 @@
 package com.aromano.ecommerce.admindashboard.controller
 
-import com.aromano.ecommerce.admindashboard.events.BalanceDecrementFailed
-import com.aromano.ecommerce.admindashboard.events.BalanceDecrementSuccess
+import com.aromano.ecommerce.admindashboard.events.ReserveBalanceFailed
+import com.aromano.ecommerce.admindashboard.events.ReserveBalanceSuccess
 import com.aromano.ecommerce.admindashboard.events.DecrementIntentoryFailed
 import com.aromano.ecommerce.admindashboard.events.InventoryDecrementSuccess
 import com.fasterxml.jackson.databind.JsonNode
@@ -70,13 +70,13 @@ class AdminController(
     }
 
     @PostMapping("/events/balance-decrement-success")
-    fun balanceDecrementSuccess(
+    fun reserveBalanceSuccess(
         @RequestParam orderId: Int,
         @RequestParam sagaId: String
     ): ResponseEntity<String> {
-        logger.info("Emitting BalanceDecrementSuccess event for orderId: $orderId, sagaId: $sagaId")
+        logger.info("Emitting ReserveBalanceSuccess event for orderId: $orderId, sagaId: $sagaId")
 
-        val event = BalanceDecrementSuccess(sagaId = sagaId, orderId = orderId)
+        val event = ReserveBalanceSuccess(sagaId = sagaId, orderId = orderId)
         kafkaTemplate.send("customer-events", event.orderId.toString(), event)
 
         return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}")
@@ -96,13 +96,13 @@ class AdminController(
     }
 
     @PostMapping("/events/balance-decrement-failed")
-    fun balanceDecrementFailed(
+    fun reserveBalanceFailed(
         @RequestParam orderId: Int,
         @RequestParam sagaId: String
     ): ResponseEntity<String> {
-        logger.info("Emitting BalanceDecrementFailed event for orderId: $orderId, sagaId: $sagaId")
+        logger.info("Emitting ReserveBalanceFailed event for orderId: $orderId, sagaId: $sagaId")
 
-        val event = BalanceDecrementFailed(sagaId = sagaId, orderId = orderId, error = "some error")
+        val event = ReserveBalanceFailed(sagaId = sagaId, orderId = orderId, error = "some error")
         kafkaTemplate.send("customer-events", event.orderId.toString(), event)
 
         return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}, error: ${event.error}")

@@ -40,7 +40,7 @@ class EventConsumer(
                 service.submitReservedInventoryForOrder(event)
             }
             is RollbackReserveInventoryCommand -> {
-                service.releaseReservedInventory(event.userId, event.amount)
+                service.releaseReservedInventory(event)
             }
         }
     }

@@ -65,7 +65,7 @@ class CreateOrderSagaTest {
             "customer-events",
             """
                 {
-                    "eventType": "BalanceDecrementSuccess",
+                    "eventType": "ReserveBalanceSuccess",
                     "orderId": 1
             """.trimIndent(),
         )

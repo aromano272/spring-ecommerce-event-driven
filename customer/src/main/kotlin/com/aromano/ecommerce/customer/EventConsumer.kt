@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.config.TopicBuilder
-import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.messaging.handler.annotation.Payload
 import org.springframework.stereotype.Component
 import kotlin.jvm.java
@@ -28,16 +27,20 @@ class EventConsumer(
         logger.info("handleCustomerCommands payload: $payload")
         val event: KafkaEvent = objectMapper.toValue(
             payload,
-            DecrementBalanceCommand::class,
-            RollbackDecrementBalanceCommand::class,
+            ReserveBalanceCommand::class,
+            RollbackReserveBalanceCommand::class,
+            SubmitReservedBalanceCommand::class,
         ) ?: return
 
         when (event) {
-            is DecrementBalanceCommand -> {
-                service.decrementBalanceForOrder(event)
+            is ReserveBalanceCommand -> {
+                service.reserveBalanceForOrder(event)
             }
-            is RollbackDecrementBalanceCommand -> {
-                service.incrementBalance(event.userId, event.amount)
+            is RollbackReserveBalanceCommand -> {
+                service.releaseReservedBalanceForOrder(event)
+            }
+            is SubmitReservedBalanceCommand -> {
+                service.submitReservedBalanceForOrder(event)
             }
         }
     }
@@ -67,14 +70,21 @@ abstract class KafkaEvent {
     val eventType: String = this::class.simpleName.orEmpty()
 }
 
-data class DecrementBalanceCommand(
+data class ReserveBalanceCommand(
     override val sagaId: String,
     val orderId: Int,
     val userId: Int,
     val amount: Cents,
 ) : KafkaEvent()
 
-data class RollbackDecrementBalanceCommand(
+data class RollbackReserveBalanceCommand(
+    override val sagaId: String,
+    val orderId: Int,
+    val userId: Int,
+    val amount: Cents,
+) : KafkaEvent()
+
+data class SubmitReservedBalanceCommand(
     override val sagaId: String,
     val orderId: Int,
     val userId: Int,

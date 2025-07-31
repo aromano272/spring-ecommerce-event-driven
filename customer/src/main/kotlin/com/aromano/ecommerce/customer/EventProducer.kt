@@ -34,12 +34,34 @@ class EventProducer(
 
 }
 
-data class BalanceDecrementSuccess(
+data class ReserveBalanceSuccess(
     override val sagaId: String,
     val orderId: Int,
 ) : KafkaEvent()
 
-data class BalanceDecrementFailed(
+data class ReserveBalanceFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String,
+) : KafkaEvent()
+
+data class SubmitReservedBalanceSuccess(
+    override val sagaId: String,
+    val orderId: Int,
+) : KafkaEvent()
+
+data class SubmitReservedBalanceFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String,
+) : KafkaEvent()
+
+data class ReleasedReservedBalanceSuccess(
+    override val sagaId: String,
+    val orderId: Int,
+) : KafkaEvent()
+
+data class ReleasedReservedBalanceFailed(
     override val sagaId: String,
     val orderId: Int,
     val error: String,

@@ -27,12 +27,30 @@ class CustomerService(
         dao.decrementBalanceIfPossibleTx(id, amount)
     }
 
-    fun decrementBalanceForOrder(event: DecrementBalanceCommand) {
+    fun reserveBalanceForOrder(event: ReserveBalanceCommand) {
         try {
-            decrementBalance(event.userId, event.amount)
-            eventProducer.send(event.orderId.toString(), BalanceDecrementSuccess(event.sagaId, event.orderId))
+            dao.reserveBalanceIfPossibleTx(event.userId, event.orderId, event.amount)
+            eventProducer.send(event.orderId.toString(), ReserveBalanceSuccess(event.sagaId, event.orderId))
         } catch (ex: Exception) {
-            eventProducer.send(event.orderId.toString(), BalanceDecrementFailed(event.sagaId, event.orderId, ex.toString()))
+            eventProducer.send(event.orderId.toString(), ReserveBalanceFailed(event.sagaId, event.orderId, ex.toString()))
+        }
+    }
+
+    fun submitReservedBalanceForOrder(event: SubmitReservedBalanceCommand) {
+        try {
+            dao.submitReservedBalanceForOrderTx(event.userId, event.orderId)
+            eventProducer.send(event.orderId.toString(), SubmitReservedBalanceSuccess(event.sagaId, event.orderId))
+        } catch (ex: Exception) {
+            eventProducer.send(event.orderId.toString(), SubmitReservedBalanceFailed(event.sagaId, event.orderId, ex.toString()))
+        }
+    }
+
+    fun releaseReservedBalanceForOrder(event: RollbackReserveBalanceCommand) {
+        try {
+            dao.releaseReservedBalanceForOrderTx(event.userId, event.orderId)
+            eventProducer.send(event.orderId.toString(), ReleasedReservedBalanceSuccess(event.sagaId, event.orderId))
+        } catch (ex: Exception) {
+            eventProducer.send(event.orderId.toString(), ReleasedReservedBalanceFailed(event.sagaId, event.orderId, ex.toString()))
         }
     }
 

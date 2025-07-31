@@ -16,12 +16,12 @@ data class DecrementIntentoryFailed(
     val error: String
 ) : KafkaEvent()
 
-data class BalanceDecrementSuccess(
+data class ReserveBalanceSuccess(
     override val sagaId: String,
     val orderId: Int
 ) : KafkaEvent()
 
-data class BalanceDecrementFailed(
+data class ReserveBalanceFailed(
     override val sagaId: String,
     val orderId: Int,
     val error: String
