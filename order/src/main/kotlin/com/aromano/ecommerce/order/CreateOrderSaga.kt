@@ -1,16 +1,13 @@
 package com.aromano.ecommerce.order
 
 import com.aromano.ecommerce.common.Cents
+import com.aromano.ecommerce.common.domain.UnhandledEventException
 import com.aromano.ecommerce.order.domain.Product
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.micrometer.observation.Observation
-import io.micrometer.observation.ObservationRegistry
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.slf4j.LoggerFactory
-import org.springframework.context.annotation.Bean
 import org.springframework.kafka.core.KafkaTemplate
-import org.springframework.kafka.support.LoggingProducerListener
 import org.springframework.kafka.support.ProducerListener
 import org.springframework.stereotype.Component
 import java.lang.Exception
@@ -75,8 +72,9 @@ class CreateOrderSaga(
 
     private enum class Step {
         CREATE_ORDER,
-        DECREMENT_INVENTORY,
+        RESERVE_INVENTORY,
         DECREMENT_BALANCE,
+        SUBMIT_RESERVED_INVENTORY,
         COMPLETE_ORDER_CREATION,
     }
 
@@ -120,14 +118,14 @@ class CreateOrderSaga(
                 run()
             }
 
-            Step.DECREMENT_INVENTORY -> kafkaTemplate.send(
+            Step.RESERVE_INVENTORY -> kafkaTemplate.send(
                 "inventory-commands",
                 orderId.toString(),
-                DecrementInventoryCommand(
+                ReserveInventoryCommand(
                     sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
-                    productIds = products.map { it.id },
+                    product = products,
                 )
             )
 
@@ -139,6 +137,16 @@ class CreateOrderSaga(
                     orderId = orderId,
                     userId = userId,
                     amount = products.sumOf { it.price },
+                )
+            )
+
+            Step.SUBMIT_RESERVED_INVENTORY -> kafkaTemplate.send(
+                "inventory-commands",
+                orderId.toString(),
+                SubmitReservedInventoryCommand(
+                    sagaId = uuid,
+                    orderId = orderId,
+                    userId = userId,
                 )
             )
 
@@ -161,10 +169,10 @@ class CreateOrderSaga(
         logger.info("$uuid rollback() currStep: $currStep")
         when (currStep) {
             Step.CREATE_ORDER -> orderService.rejectOrder(orderId)
-            Step.DECREMENT_INVENTORY -> kafkaTemplate.send(
+            Step.RESERVE_INVENTORY -> kafkaTemplate.send(
                 "inventory-commands",
                 orderId.toString(),
-                RollbackDecrementInventoryCommand(
+                RollbackReserveInventoryCommand(
                     sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
@@ -181,6 +189,8 @@ class CreateOrderSaga(
                     amount = products.sumOf { it.price },
                 )
             )
+            // TODO(aromano): considering these steps as "unfailable", will need to revisit later
+            Step.SUBMIT_RESERVED_INVENTORY,
             Step.COMPLETE_ORDER_CREATION -> {}
         }
         rollback()
@@ -188,14 +198,14 @@ class CreateOrderSaga(
 
     override fun handleEvent(event: KafkaEvent) {
         when (event) {
-            is InventoryDecrementSuccess -> {
-                if (currStep != Step.DECREMENT_INVENTORY) return
+            is ReserveInventorySuccess -> {
+                if (currStep != Step.RESERVE_INVENTORY) return
                 if (event.orderId != orderId) return
             }
-            is InventoryDecrementFailed -> {
-                if (currStep != Step.DECREMENT_INVENTORY) return
+            is ReserveInventoryFailed -> {
+                if (currStep != Step.RESERVE_INVENTORY) return
                 if (event.orderId != orderId) return
-                error = "InventoryDecrementFailed"
+                error = "ReserveInventoryFailed"
                 rollback()
                 return
             }
@@ -210,7 +220,14 @@ class CreateOrderSaga(
                 rollback()
                 return
             }
-            else -> return
+            is SubmitReservedInventorySuccess -> {
+                if (currStep != Step.SUBMIT_RESERVED_INVENTORY) return
+                if (event.orderId != orderId) return
+            }
+            is ReleasedReservedInventorySuccess -> return
+            is SubmitReservedInventoryFailed,
+            is ReleasedReservedInventoryFailed -> throw UnsupportedOperationException()
+            else -> throw UnhandledEventException(event.eventType)
         }
         currStepIdx++
         run()
@@ -240,29 +257,11 @@ abstract class KafkaEvent {
     val eventType: String = this::class.simpleName.orEmpty()
 }
 
-data class DecrementInventoryCommand(
+data class ReserveInventoryCommand(
     override val sagaId: String,
     val orderId: Int,
     val userId: Int,
-    val productIds: List<Int>,
-) : KafkaEvent()
-
-data class RollbackDecrementInventoryCommand(
-    override val sagaId: String,
-    val orderId: Int,
-    val userId: Int,
-    val productIds: List<Int>,
-) : KafkaEvent()
-
-data class InventoryDecrementSuccess(
-    override val sagaId: String,
-    val orderId: Int,
-) : KafkaEvent()
-
-data class InventoryDecrementFailed(
-    override val sagaId: String,
-    val orderId: Int,
-    val error: String,
+    val product: List<Product>,
 ) : KafkaEvent()
 
 data class DecrementBalanceCommand(
@@ -270,6 +269,53 @@ data class DecrementBalanceCommand(
     val orderId: Int,
     val userId: Int,
     val amount: Cents,
+) : KafkaEvent()
+
+data class SubmitReservedInventoryCommand(
+    override val sagaId: String,
+    val orderId: Int,
+    val userId: Int,
+) : KafkaEvent()
+
+data class RollbackReserveInventoryCommand(
+    override val sagaId: String,
+    val orderId: Int,
+    val userId: Int,
+    val productIds: List<Int>,
+) : KafkaEvent()
+
+data class ReserveInventorySuccess(
+    override val sagaId: String,
+    val orderId: Int,
+    val totalCost: Cents,
+) : KafkaEvent()
+
+data class ReserveInventoryFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String,
+) : KafkaEvent()
+
+data class SubmitReservedInventorySuccess(
+    override val sagaId: String,
+    val orderId: Int,
+) : KafkaEvent()
+
+data class SubmitReservedInventoryFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String,
+) : KafkaEvent()
+
+data class ReleasedReservedInventorySuccess(
+    override val sagaId: String,
+    val orderId: Int,
+) : KafkaEvent()
+
+data class ReleasedReservedInventoryFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String,
 ) : KafkaEvent()
 
 data class RollbackDecrementBalanceCommand(

@@ -2,7 +2,7 @@ package com.aromano.ecommerce.admindashboard.controller
 
 import com.aromano.ecommerce.admindashboard.events.BalanceDecrementFailed
 import com.aromano.ecommerce.admindashboard.events.BalanceDecrementSuccess
-import com.aromano.ecommerce.admindashboard.events.InventoryDecrementFailed
+import com.aromano.ecommerce.admindashboard.events.DecrementIntentoryFailed
 import com.aromano.ecommerce.admindashboard.events.InventoryDecrementSuccess
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -83,13 +83,13 @@ class AdminController(
     }
 
     @PostMapping("/events/inventory-decrement-failed")
-    fun inventoryDecrementFailed(
+    fun DecrementIntentoryFailed(
         @RequestParam orderId: Int,
         @RequestParam sagaId: String
     ): ResponseEntity<String> {
-        logger.info("Emitting InventoryDecrementFailed event for orderId: $orderId, sagaId: $sagaId")
+        logger.info("Emitting DecrementIntentoryFailed event for orderId: $orderId, sagaId: $sagaId")
 
-        val event = InventoryDecrementFailed(sagaId = sagaId, orderId = orderId, error = "some error")
+        val event = DecrementIntentoryFailed(sagaId = sagaId, orderId = orderId, error = "some error")
         kafkaTemplate.send("inventory-events", event.orderId.toString(), event)
 
         return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}, error: ${event.error}")

@@ -27,16 +27,20 @@ class EventConsumer(
         logger.info("handleInventoryCommands payload: $payload")
         val event: KafkaEvent = objectMapper.toValue(
             payload,
-            DecrementInventoryCommand::class,
-            RollbackDecrementInventoryCommand::class,
+            ReserveInventoryCommand::class,
+            SubmitReservedInventoryCommand::class,
+            RollbackReserveInventoryCommand::class,
         ) ?: return
 
         when (event) {
-            is DecrementInventoryCommand -> {
-                service.decrementInventoryForOrder(event)
+            is ReserveInventoryCommand -> {
+                service.reserveInventoryForOrder(event)
             }
-            is RollbackDecrementInventoryCommand -> {
-                service.incrementInventory(event.userId, event.amount)
+            is SubmitReservedInventoryCommand -> {
+                service.submitReservedInventoryForOrder(event)
+            }
+            is RollbackReserveInventoryCommand -> {
+                service.releaseReservedInventory(event.userId, event.amount)
             }
         }
     }
@@ -66,17 +70,27 @@ abstract class KafkaEvent {
     val eventType: String = this::class.simpleName.orEmpty()
 }
 
-data class DecrementInventoryCommand(
+data class ReserveProductEventData(
+    val id: Int,
+    val price: Cents,
+)
+
+data class ReserveInventoryCommand(
     override val sagaId: String,
     val orderId: Int,
     val userId: Int,
-    val amount: Cents,
+    val products: List<ReserveProductEventData>
 ) : KafkaEvent()
 
-data class RollbackDecrementInventoryCommand(
+data class SubmitReservedInventoryCommand(
     override val sagaId: String,
     val orderId: Int,
     val userId: Int,
-    val amount: Cents,
+) : KafkaEvent()
+
+data class RollbackReserveInventoryCommand(
+    override val sagaId: String,
+    val orderId: Int,
+    val userId: Int,
 ) : KafkaEvent()
 

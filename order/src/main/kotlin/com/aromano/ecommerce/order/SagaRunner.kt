@@ -1,6 +1,6 @@
 package com.aromano.ecommerce.order
 
-import com.aromano.ecommerce.order.CreateOrderSaga.Step
+import com.aromano.ecommerce.order.ReleasedReservedInventoryFailed
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
@@ -9,7 +9,6 @@ import org.springframework.kafka.config.TopicBuilder
 import org.springframework.messaging.handler.annotation.Payload
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
-import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
@@ -62,13 +61,17 @@ class SagaRunner(
         logger.info("handleInventoryEvents payload: $payload")
         val event: KafkaEvent = objectMapper.toValue(
             payload,
-            InventoryDecrementSuccess::class,
-            InventoryDecrementFailed::class,
+            ReserveInventorySuccess::class,
+            ReserveInventoryFailed::class,
+            SubmitReservedInventorySuccess::class,
+            SubmitReservedInventoryFailed::class,
+            ReleasedReservedInventorySuccess::class,
+            ReleasedReservedInventoryFailed::class,
         ) ?: return
 
         when (event) {
-            is InventoryDecrementSuccess,
-            is InventoryDecrementFailed -> mem[event.sagaId]?.handleEvent(event)
+            is ReserveInventorySuccess,
+            is ReserveInventoryFailed -> mem[event.sagaId]?.handleEvent(event)
         }
     }
 

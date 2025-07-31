@@ -10,7 +10,7 @@ data class InventoryDecrementSuccess(
     val orderId: Int
 ) : KafkaEvent()
 
-data class InventoryDecrementFailed(
+data class DecrementIntentoryFailed(
     override val sagaId: String,
     val orderId: Int,
     val error: String

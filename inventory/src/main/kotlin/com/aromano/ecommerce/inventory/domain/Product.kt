@@ -7,4 +7,5 @@ data class Product(
     val name: String,
     val price: Cents,
     val inventory: Int,
+    val reservedInventory: Int,
 )
