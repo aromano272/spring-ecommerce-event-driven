@@ -2,6 +2,10 @@
 GET http://localhost:8081/order/all?userId=1
 Content-Type: application/json
 
+### Get order by id
+GET http://localhost:8081/order/1
+Content-Type: application/json
+
 ### Create order
 POST http://localhost:8081/order?userId=1
 Content-Type: application/json

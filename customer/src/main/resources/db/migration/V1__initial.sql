@@ -3,8 +3,8 @@ CREATE TABLE IF NOT EXISTS customers
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     balance INT NOT NULL DEFAULT 0,
     reservedBalance INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now()
+    createdAt TIMESTAMP NOT NULL DEFAULT now(),
+    updatedAt TIMESTAMP NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS reserved_balances

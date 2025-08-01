@@ -11,7 +11,7 @@ GET http://localhost:8080/customer/1
 Content-Type: application/json
 
 ### Credit balance
-POST http://localhost:8080/customer/1/credit?amount=100
+POST http://localhost:8080/customer/1/credit?amount=1000000000
 Content-Type: application/json
 
 ### Debit balance

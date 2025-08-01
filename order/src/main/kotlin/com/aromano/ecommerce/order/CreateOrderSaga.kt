@@ -127,7 +127,7 @@ class CreateOrderSaga(
                     sagaId = uuid,
                     orderId = orderId,
                     userId = userId,
-                    product = products,
+                    products = products,
                 )
             )
 
@@ -239,9 +239,17 @@ class CreateOrderSaga(
                 if (currStep != Step.SUBMIT_RESERVED_INVENTORY) return
                 if (event.orderId != orderId) return
             }
-            is ReleasedReservedInventorySuccess -> return
+            is SubmitReservedBalanceSuccess -> {
+                if (currStep != Step.SUBMIT_RESERVED_BALANCE) return
+                if (event.orderId != orderId) return
+            }
+            is ReleasedReservedInventorySuccess,
+            is ReleasedReservedBalanceSuccess -> return
+
             is SubmitReservedInventoryFailed,
-            is ReleasedReservedInventoryFailed -> throw UnsupportedOperationException()
+            is ReleasedReservedInventoryFailed,
+            is SubmitReservedBalanceFailed,
+            is ReleasedReservedBalanceFailed -> throw UnsupportedOperationException()
             else -> throw UnhandledEventException(event.eventType)
         }
         currStepIdx++
@@ -276,7 +284,7 @@ data class ReserveInventoryCommand(
     override val sagaId: String,
     val orderId: Int,
     val userId: Int,
-    val product: List<Product>,
+    val products: List<Product>,
 ) : KafkaEvent()
 
 data class ReserveBalanceCommand(

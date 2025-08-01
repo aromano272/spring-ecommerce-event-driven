@@ -41,6 +41,15 @@
             gap: 10px;
             margin-top: 20px;
         }
+        .button-with-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .button-with-input input {
+            width: 80px;
+            flex-grow: 0;
+        }
         button {
             padding: 10px 15px;
             background-color: #4CAF50;
@@ -85,10 +94,17 @@
     <div class="button-container">
         <button id="createOrder">Create Order</button>
         <button id="getOrder" disabled>Get Order</button>
-        <button id="reserveInventorySuccess" disabled>Reserve Inventory Success</button>
+        <div class="button-with-input">
+            <button id="reserveInventorySuccess" disabled>Reserve Inventory Success</button>
+            <input type="number" id="totalCost" placeholder="Total Cost" value="100">
+        </div>
         <button id="reserveBalanceSuccess" disabled>Reserve Balance Success</button>
         <button id="reserveInventoryFailed" disabled>Reserve Inventory Failed</button>
         <button id="reserveBalanceFailed" disabled>Reserve Balance Failed</button>
+        <button id="submitReservedBalanceSuccess" disabled>Submit Reserved Balance Success</button>
+        <button id="submitReservedBalanceFailed" disabled>Submit Reserved Balance Failed</button>
+        <button id="releasedReservedBalanceSuccess" disabled>Released Reserved Balance Success</button>
+        <button id="releasedReservedBalanceFailed" disabled>Released Reserved Balance Failed</button>
     </div>
 
     <div id="response">
@@ -110,7 +126,11 @@
                 'reserveInventorySuccess',
                 'reserveBalanceSuccess',
                 'reserveInventoryFailed',
-                'reserveBalanceFailed'
+                'reserveBalanceFailed',
+                'submitReservedBalanceSuccess',
+                'submitReservedBalanceFailed',
+                'releasedReservedBalanceSuccess',
+                'releasedReservedBalanceFailed'
             ];
 
             buttons.forEach(buttonId => {
@@ -144,12 +164,13 @@
             try {
                 const orderId = document.getElementById('orderId').value;
                 const sagaId = document.getElementById('sagaId').value;
+                const totalCost = document.getElementById('totalCost').value;
 
-                const response = await fetch(`/api/events/inventory-decrement-success?orderId=${orderId}&sagaId=${sagaId}`, {
+                const response = await fetch(`/api/events/inventory-decrement-success?orderId=${orderId}&sagaId=${sagaId}&totalCost=${totalCost}`, {
                     method: 'POST'
                 });
                 const data = await response.text();
-                appendToLog(`Button: Reserve Inventory Success, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
+                appendToLog(`Button: Reserve Inventory Success, OrderID: ${orderId}, SagaID: ${sagaId}, TotalCost: ${totalCost}\n${data}`);
             } catch (error) {
                 appendToLog(`Error: ${error.message}`);
             }
@@ -213,6 +234,70 @@
                 });
                 const data = await response.text();
                 appendToLog(`Button: Get Order, OrderID: ${orderId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Submit Reserved Balance Success button
+        document.getElementById('submitReservedBalanceSuccess').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                const sagaId = document.getElementById('sagaId').value;
+
+                const response = await fetch(`/api/events/submit-reserved-balance-success?orderId=${orderId}&sagaId=${sagaId}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Submit Reserved Balance Success, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Submit Reserved Balance Failed button
+        document.getElementById('submitReservedBalanceFailed').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                const sagaId = document.getElementById('sagaId').value;
+
+                const response = await fetch(`/api/events/submit-reserved-balance-failed?orderId=${orderId}&sagaId=${sagaId}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Submit Reserved Balance Failed, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Released Reserved Balance Success button
+        document.getElementById('releasedReservedBalanceSuccess').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                const sagaId = document.getElementById('sagaId').value;
+
+                const response = await fetch(`/api/events/released-reserved-balance-success?orderId=${orderId}&sagaId=${sagaId}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Released Reserved Balance Success, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Released Reserved Balance Failed button
+        document.getElementById('releasedReservedBalanceFailed').addEventListener('click', async () => {
+            try {
+                const orderId = document.getElementById('orderId').value;
+                const sagaId = document.getElementById('sagaId').value;
+
+                const response = await fetch(`/api/events/released-reserved-balance-failed?orderId=${orderId}&sagaId=${sagaId}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Released Reserved Balance Failed, OrderID: ${orderId}, SagaID: ${sagaId}\n${data}`);
             } catch (error) {
                 appendToLog(`Error: ${error.message}`);
             }

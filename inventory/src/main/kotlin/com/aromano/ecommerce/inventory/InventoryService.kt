@@ -54,7 +54,7 @@ class InventoryService(
                     val reserve = productsById[product.id]!!
                     val available = product.inventory - product.reservedInventory
                     if (reserve.price != product.price) throw IllegalArgumentException("Invalid product, reserve: $reserve, product: $product")
-                    if (available >= reserve.quantity) throw IllegalArgumentException("Not enough inventory available to fulfill order, reserve: $reserve, product: $product")
+                    if (available < reserve.quantity) throw IllegalArgumentException("Not enough inventory available to fulfill order, reserve: $reserve, product: $product")
                 },
             )
             val totalCost = products.sumOf { it.price * it.quantity }

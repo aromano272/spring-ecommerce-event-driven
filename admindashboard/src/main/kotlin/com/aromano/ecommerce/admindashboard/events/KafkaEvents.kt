@@ -5,12 +5,13 @@ abstract class KafkaEvent {
     val eventType: String = this::class.simpleName.orEmpty()
 }
 
-data class InventoryDecrementSuccess(
+data class ReserveInventorySuccess(
     override val sagaId: String,
-    val orderId: Int
+    val orderId: Int,
+    val totalCost: Int
 ) : KafkaEvent()
 
-data class DecrementIntentoryFailed(
+data class ReserveInventoryFailed(
     override val sagaId: String,
     val orderId: Int,
     val error: String
@@ -22,6 +23,28 @@ data class ReserveBalanceSuccess(
 ) : KafkaEvent()
 
 data class ReserveBalanceFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String
+) : KafkaEvent()
+
+data class SubmitReservedBalanceSuccess(
+    override val sagaId: String,
+    val orderId: Int
+) : KafkaEvent()
+
+data class SubmitReservedBalanceFailed(
+    override val sagaId: String,
+    val orderId: Int,
+    val error: String
+) : KafkaEvent()
+
+data class ReleasedReservedBalanceSuccess(
+    override val sagaId: String,
+    val orderId: Int
+) : KafkaEvent()
+
+data class ReleasedReservedBalanceFailed(
     override val sagaId: String,
     val orderId: Int,
     val error: String

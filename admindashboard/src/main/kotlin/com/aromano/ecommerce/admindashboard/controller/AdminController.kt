@@ -2,9 +2,12 @@ package com.aromano.ecommerce.admindashboard.controller
 
 import com.aromano.ecommerce.admindashboard.events.ReserveBalanceFailed
 import com.aromano.ecommerce.admindashboard.events.ReserveBalanceSuccess
-import com.aromano.ecommerce.admindashboard.events.DecrementIntentoryFailed
-import com.aromano.ecommerce.admindashboard.events.InventoryDecrementSuccess
-import com.fasterxml.jackson.databind.JsonNode
+import com.aromano.ecommerce.admindashboard.events.ReserveInventoryFailed
+import com.aromano.ecommerce.admindashboard.events.ReserveInventorySuccess
+import com.aromano.ecommerce.admindashboard.events.SubmitReservedBalanceSuccess
+import com.aromano.ecommerce.admindashboard.events.SubmitReservedBalanceFailed
+import com.aromano.ecommerce.admindashboard.events.ReleasedReservedBalanceSuccess
+import com.aromano.ecommerce.admindashboard.events.ReleasedReservedBalanceFailed
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -59,14 +62,15 @@ class AdminController(
     @PostMapping("/events/inventory-decrement-success")
     fun inventoryDecrementSuccess(
         @RequestParam orderId: Int,
-        @RequestParam sagaId: String
+        @RequestParam sagaId: String,
+        @RequestParam totalCost: Int
     ): ResponseEntity<String> {
-        logger.info("Emitting InventoryDecrementSuccess event for orderId: $orderId, sagaId: $sagaId")
+        logger.info("Emitting InventoryDecrementSuccess event for orderId: $orderId, sagaId: $sagaId, totalCost: $totalCost")
 
-        val event = InventoryDecrementSuccess(sagaId = sagaId, orderId = orderId)
+        val event = ReserveInventorySuccess(sagaId = sagaId, orderId = orderId, totalCost = totalCost)
         kafkaTemplate.send("inventory-events", event.orderId.toString(), event)
 
-        return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}")
+        return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}, totalCost: ${event.totalCost}")
     }
 
     @PostMapping("/events/balance-decrement-success")
@@ -89,7 +93,7 @@ class AdminController(
     ): ResponseEntity<String> {
         logger.info("Emitting DecrementIntentoryFailed event for orderId: $orderId, sagaId: $sagaId")
 
-        val event = DecrementIntentoryFailed(sagaId = sagaId, orderId = orderId, error = "some error")
+        val event = ReserveInventoryFailed(sagaId = sagaId, orderId = orderId, error = "some error")
         kafkaTemplate.send("inventory-events", event.orderId.toString(), event)
 
         return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}, error: ${event.error}")
@@ -120,5 +124,57 @@ class AdminController(
             logger.error("Error getting order: ${e.message}")
             return ResponseEntity.badRequest().body("Error getting order: ${e.message}")
         }
+    }
+
+    @PostMapping("/events/submit-reserved-balance-success")
+    fun submitReservedBalanceSuccess(
+        @RequestParam orderId: Int,
+        @RequestParam sagaId: String
+    ): ResponseEntity<String> {
+        logger.info("Emitting SubmitReservedBalanceSuccess event for orderId: $orderId, sagaId: $sagaId")
+
+        val event = SubmitReservedBalanceSuccess(sagaId = sagaId, orderId = orderId)
+        kafkaTemplate.send("customer-events", event.orderId.toString(), event)
+
+        return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}")
+    }
+
+    @PostMapping("/events/submit-reserved-balance-failed")
+    fun submitReservedBalanceFailed(
+        @RequestParam orderId: Int,
+        @RequestParam sagaId: String
+    ): ResponseEntity<String> {
+        logger.info("Emitting SubmitReservedBalanceFailed event for orderId: $orderId, sagaId: $sagaId")
+
+        val event = SubmitReservedBalanceFailed(sagaId = sagaId, orderId = orderId, error = "some error")
+        kafkaTemplate.send("customer-events", event.orderId.toString(), event)
+
+        return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}, error: ${event.error}")
+    }
+
+    @PostMapping("/events/released-reserved-balance-success")
+    fun releasedReservedBalanceSuccess(
+        @RequestParam orderId: Int,
+        @RequestParam sagaId: String
+    ): ResponseEntity<String> {
+        logger.info("Emitting ReleasedReservedBalanceSuccess event for orderId: $orderId, sagaId: $sagaId")
+
+        val event = ReleasedReservedBalanceSuccess(sagaId = sagaId, orderId = orderId)
+        kafkaTemplate.send("customer-events", event.orderId.toString(), event)
+
+        return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}")
+    }
+
+    @PostMapping("/events/released-reserved-balance-failed")
+    fun releasedReservedBalanceFailed(
+        @RequestParam orderId: Int,
+        @RequestParam sagaId: String
+    ): ResponseEntity<String> {
+        logger.info("Emitting ReleasedReservedBalanceFailed event for orderId: $orderId, sagaId: $sagaId")
+
+        val event = ReleasedReservedBalanceFailed(sagaId = sagaId, orderId = orderId, error = "some error")
+        kafkaTemplate.send("customer-events", event.orderId.toString(), event)
+
+        return ResponseEntity.ok("Event sent: ${event.eventType} for orderId: ${event.orderId}, sagaId: ${event.sagaId}, error: ${event.error}")
     }
 }

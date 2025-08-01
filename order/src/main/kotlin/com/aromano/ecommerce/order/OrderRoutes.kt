@@ -35,9 +35,12 @@ class OrderRoutes(
     @PostMapping
     fun createOrder(@RequestParam userId: Int): Order {
         val products = listOf(
-            Product(1, "name 1", 100),
-            Product(2, "name 2", 200),
+            Product(1, "name 1", 83),
+            Product(2, "name 2", 73),
         )
+
+        Thread.sleep(10)
+        return Order(1, 1, OrderState.CREATED, emptyList())
         logger.info("createOrder before thread: ${Thread.currentThread()}")
         val saga = createOrderSagaFactory.create()
 

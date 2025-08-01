@@ -81,6 +81,10 @@ class SagaRunner(
             payload,
             ReserveBalanceSuccess::class,
             ReserveBalanceFailed::class,
+            SubmitReservedBalanceSuccess::class,
+            SubmitReservedBalanceFailed::class,
+            ReleasedReservedBalanceSuccess::class,
+            ReleasedReservedBalanceFailed::class,
         ) ?: return
 
         mem[event.sagaId]?.handleEvent(event)
