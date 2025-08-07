@@ -1,5 +1,12 @@
-Total requests: 0
+Total requests (summary): 4727
 
-No first response captured
+FIRST RESPONSE:
+Status: 200
+Body: {"id":400152,"userId":1,"state":"IN_PROGRESS","products":[{"id":1,"name":"name 1","price":83},{"id":2,"name":"name 2","price":73}]}
 
-No last response captured
+
+LAST RESPONSE:
+Status: 200
+Body: {"id":404136,"userId":1,"state":"IN_PROGRESS","products":[{"id":1,"name":"name 1","price":83},{"id":2,"name":"name 2","price":73}]}
+
+

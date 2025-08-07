@@ -1,39 +1,60 @@
--- Configure POST request
 wrk.method = "POST"
 wrk.body = '{"userId": 1}'
 wrk.headers["Content-Type"] = "application/json"
 
--- Variables to store first and last responses
-local first_response = nil
-local last_response = nil
+local first_response_written = false
 local total_requests = 0
 
-response = function(status, headers, body)
-	total_requests = total_requests + 1
+local first_file = "first_response.tmp"
+local last_file = "last_response.tmp"
 
-	-- Save the first response only once
-	if first_response == nil then
-		first_response = "FIRST RESPONSE:\nStatus: " .. status .. "\nBody: " .. string.sub(body or "", 1, 500)
+local function write_file(filename, text)
+	local f = io.open(filename, "w")
+	if f then
+		f:write(text .. "\n")
+		f:close()
 	end
-
-	-- Continuously overwrite last response
-	last_response = "LAST RESPONSE:\nStatus: " .. status .. "\nBody: " .. string.sub(body or "", 1, 500)
 end
 
-done = function(summary, latency, requests)
-	local file = io.open("wrk_responses.txt", "w")
-	file:write("Total requests: " .. total_requests .. "\n\n")
-	if first_response ~= nil then
-		file:write(first_response .. "\n\n")
-	else
-		file:write("No first response captured\n\n")
+function response(status, headers, body)
+	total_requests = total_requests + 1
+	local snippet = string.sub(body or "<empty>", 1, 200)
+
+	-- Write first response once
+	if not first_response_written then
+		write_file(first_file, "FIRST RESPONSE:\nStatus: " .. status .. "\nBody: " .. snippet)
+		first_response_written = true
 	end
 
-	if last_response ~= nil then
-		file:write(last_response .. "\n")
-	else
-		file:write("No last response captured\n")
+	-- Write last response every 100 requests
+	if total_requests % 100 == 0 then
+		write_file(last_file, "LAST RESPONSE:\nStatus: " .. status .. "\nBody: " .. snippet)
+	end
+end
+
+function done(summary, latency, requests)
+	local out = io.open("wrk_responses.txt", "w")
+	if not out then
+		return
 	end
 
-	file:close()
+	out:write("Total requests (summary): " .. (summary.requests or 0) .. "\n\n")
+
+	-- Append first response if file exists
+	local f = io.open(first_file, "r")
+	if f then
+		out:write(f:read("*a") .. "\n\n")
+		f:close()
+		os.remove(first_file)
+	end
+
+	-- Append last response if file exists
+	local l = io.open(last_file, "r")
+	if l then
+		out:write(l:read("*a") .. "\n\n")
+		l:close()
+		os.remove(last_file)
+	end
+
+	out:close()
 end

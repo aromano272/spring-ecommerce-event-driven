@@ -45,19 +45,19 @@ class SagaRunner(
     }
 
     @Bean
-    fun topicInventoryEvents() = TopicBuilder.name("inventory-events").build()
+    fun topicInventoryEvents() = TopicBuilder.name("inventory-events").partitions(10).build()
 
     @Bean
-    fun topicInventoryCommands() = TopicBuilder.name("inventory-commands").build()
+    fun topicInventoryCommands() = TopicBuilder.name("inventory-commands").partitions(10).build()
 
     @Bean
-    fun topicCustomerEvents() = TopicBuilder.name("customer-events").build()
+    fun topicCustomerEvents() = TopicBuilder.name("customer-events").partitions(10).build()
 
     @Bean
-    fun topicCustomerCommands() = TopicBuilder.name("customer-commands").build()
+    fun topicCustomerCommands() = TopicBuilder.name("customer-commands").partitions(10).build()
 
     @KafkaListener(topics = ["inventory-events"], groupId = "saga-runner")
-    fun handleInventoryEvents(@Payload payload: String) {
+    suspend fun handleInventoryEvents(@Payload payload: String) {
         logger.info("handleInventoryEvents thread: ${Thread.currentThread()}")
         logger.info("handleInventoryEvents payload: $payload")
         val event: KafkaEvent = objectMapper.toValue(
@@ -74,7 +74,7 @@ class SagaRunner(
     }
 
     @KafkaListener(topics = ["customer-events"], groupId = "saga-runner")
-    fun handleCustomerEvents(@Payload payload: String) {
+    suspend fun handleCustomerEvents(@Payload payload: String) {
         logger.info("handleCustomerEvents thread: ${Thread.currentThread()}")
         logger.info("handleCustomerEvents payload: $payload")
         val event: KafkaEvent = objectMapper.toValue(

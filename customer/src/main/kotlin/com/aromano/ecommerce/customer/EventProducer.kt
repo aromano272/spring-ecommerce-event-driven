@@ -22,7 +22,7 @@ class EventProducer(
     private val logger = LoggerFactory.getLogger(EventProducer::class.java)
 
     @Bean
-    fun topicCustomerEvents() = TopicBuilder.name("customer-events").build()
+    fun topicCustomerEvents() = TopicBuilder.name("customer-events").partitions(10).build()
 
     fun send(
         key: String,

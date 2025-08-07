@@ -16,7 +16,7 @@ class EventProducer(
     private val logger = LoggerFactory.getLogger(EventProducer::class.java)
 
     @Bean
-    fun topicInventoryEvents() = TopicBuilder.name("inventory-events").build()
+    fun topicInventoryEvents() = TopicBuilder.name("inventory-events").partitions(10).build()
 
     fun send(
         key: String,
