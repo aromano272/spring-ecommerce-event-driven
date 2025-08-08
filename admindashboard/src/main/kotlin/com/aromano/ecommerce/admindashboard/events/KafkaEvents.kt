@@ -65,13 +65,10 @@ class KafkaDispatchListener(
     private val logger = LoggerFactory.getLogger(KafkaDispatchListener::class.java)
     private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
 
-    @KafkaListener(topics = [KafkaRef.TOPIC_DISPATCH])
+    @KafkaListener(topics = ["topic-dispatch"])
     fun listen(message: String) {
-        logger.info("Received message from topic-dispatch: $message")
+        logger.info("Received message $message")
 
-        val timestamp = LocalDateTime.now().format(formatter)
-        val formattedMessage = "[$timestamp] $message"
-
-        adminController.addDispatchMessage(formattedMessage)
+        adminController.addDispatchMessage(message)
     }
 }

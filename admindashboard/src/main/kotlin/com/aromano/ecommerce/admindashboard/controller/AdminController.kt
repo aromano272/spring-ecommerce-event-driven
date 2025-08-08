@@ -33,6 +33,32 @@ class AdminController(
     private val emitters = CopyOnWriteArrayList<SseEmitter>()
     private val dispatchMessages = mutableListOf<String>()
 
+    fun addDispatchMessage(message: String) {
+        dispatchMessages.add(message)
+        // Keep only the last 100 messages
+        if (dispatchMessages.size > 100) {
+            dispatchMessages.removeAt(0)
+        }
+
+        // Send the message to all connected clients
+        val failedEmitters = mutableListOf<SseEmitter>()
+
+        emitters.forEach { emitter ->
+            try {
+                val event = SseEmitter.event()
+                    .name("message")
+                    .data(message)
+                emitter.send(event)
+            } catch (e: Exception) {
+                logger.error("Error sending message to client: ${e.message}")
+                failedEmitters.add(emitter)
+            }
+        }
+
+        // Remove failed emitters
+        emitters.removeAll(failedEmitters)
+    }
+
     @GetMapping("/events")
     fun events(): SseEmitter {
         val emitter = SseEmitter(Long.MAX_VALUE)
@@ -58,7 +84,7 @@ class AdminController(
     fun startIngester(@RequestParam delay: Int): ResponseEntity<String> {
         logger.info("Starting ingester with delay: $delay")
 
-        val ingesterUrl = "http://localhost:8083/ingester/start?delay=$delay"
+        val ingesterUrl = "http://localhost:8081/ingester/start?delay=$delay"
         try {
             restTemplate.postForEntity(ingesterUrl, null, String::class.java)
             return ResponseEntity.ok("Ingester started with delay: $delay")
@@ -72,7 +98,7 @@ class AdminController(
     fun stopIngester(): ResponseEntity<String> {
         logger.info("Stopping ingester")
 
-        val ingesterUrl = "http://localhost:8083/ingester/stop"
+        val ingesterUrl = "http://localhost:8081/ingester/stop"
         try {
             restTemplate.postForEntity(ingesterUrl, null, String::class.java)
             return ResponseEntity.ok("Ingester stopped")
@@ -86,7 +112,7 @@ class AdminController(
     fun setTransformerWorkSleep(@RequestParam delay: Long): ResponseEntity<String> {
         logger.info("Setting transformer work sleep to: $delay")
 
-        val transformerUrl = "http://localhost:8084/transformer/work-sleep?delay=$delay"
+        val transformerUrl = "http://localhost:8083/transformer/work-sleep?delay=$delay"
         try {
             restTemplate.postForEntity(transformerUrl, null, String::class.java)
             return ResponseEntity.ok("Transformer work sleep set to: $delay")

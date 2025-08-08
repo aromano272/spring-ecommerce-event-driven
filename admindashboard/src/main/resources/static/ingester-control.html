@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ingester & Transformer Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .input-container {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .button-with-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .button-with-input input {
+            width: 80px;
+            flex-grow: 0;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-align: left;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            min-height: 100px;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            flex-grow: 1;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            margin-right: 15px;
+            color: #4CAF50;
+            text-decoration: none;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ingester & Transformer Control</h1>
+    
+    <div class="nav-links">
+        <a href="index.html">Back to Main Dashboard</a>
+    </div>
+
+    <div class="button-container">
+        <h2>Ingester & Transformer Control</h2>
+        <div class="button-with-input">
+            <button id="startIngester">Start Ingester</button>
+            <input type="number" id="ingesterDelay" placeholder="Delay (ms)" value="1000">
+        </div>
+        <button id="stopIngester">Stop Ingester</button>
+        <div class="button-with-input">
+            <button id="setTransformerWorkSleep">Set Transformer Work Sleep</button>
+            <input type="number" id="transformerDelay" placeholder="Delay (ms)" value="100">
+        </div>
+    </div>
+
+    <h2>Dispatch Messages</h2>
+    <div id="dispatchMessages" style="height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-bottom: 20px; background-color: #f9f9f9;">
+        <p>Dispatch messages will appear here...</p>
+    </div>
+
+    <div id="response">
+        <p>Response will appear here...</p>
+    </div>
+
+    <script>
+        // Start Ingester button
+        document.getElementById('startIngester').addEventListener('click', async () => {
+            try {
+                const delay = document.getElementById('ingesterDelay').value;
+
+                const response = await fetch(`/api/ingester/start?delay=${delay}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Start Ingester, Delay: ${delay}ms\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Stop Ingester button
+        document.getElementById('stopIngester').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/ingester/stop', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Stop Ingester\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Set Transformer Work Sleep button
+        document.getElementById('setTransformerWorkSleep').addEventListener('click', async () => {
+            try {
+                const delay = document.getElementById('transformerDelay').value;
+
+                const response = await fetch(`/api/transformer/work-sleep?delay=${delay}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Set Transformer Work Sleep, Delay: ${delay}ms\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Function to append to the log instead of replacing content
+        function appendToLog(message) {
+            const responseDiv = document.getElementById('response');
+            const currentContent = responseDiv.innerHTML;
+
+            // If it's the initial placeholder text, replace it
+            if (currentContent.includes('Response will appear here...')) {
+                responseDiv.innerHTML = `<pre>${message}</pre>`;
+            } else {
+                // Otherwise append with a separator
+                responseDiv.innerHTML = `${currentContent}<hr><pre>${message}</pre>`;
+            }
+
+            // Scroll to the bottom of the response div
+            responseDiv.scrollTop = responseDiv.scrollHeight;
+        }
+
+        // Function to append to the dispatch messages
+        function appendToDispatchMessages(message) {
+            const dispatchMessagesDiv = document.getElementById('dispatchMessages');
+            const currentContent = dispatchMessagesDiv.innerHTML;
+
+            // If it's the initial placeholder text, replace it
+            if (currentContent.includes('Dispatch messages will appear here...')) {
+                dispatchMessagesDiv.innerHTML = `<pre>${message}</pre>`;
+            } else {
+                // Otherwise append with a separator
+                dispatchMessagesDiv.innerHTML = `${currentContent}<hr><pre>${message}</pre>`;
+            }
+
+            // Scroll to the bottom of the dispatch messages div
+            dispatchMessagesDiv.scrollTop = dispatchMessagesDiv.scrollHeight;
+        }
+
+        // Connect to SSE endpoint for dispatch messages
+        let eventSource = new EventSource('/api/events');
+
+        eventSource.addEventListener('message', event => {
+            appendToDispatchMessages(event.data);
+        });
+
+        eventSource.addEventListener('messages', event => {
+            const messages = JSON.parse(event.data);
+            if (messages.length > 0) {
+                const dispatchMessagesDiv = document.getElementById('dispatchMessages');
+                dispatchMessagesDiv.innerHTML = ''; // Clear the div
+
+                messages.forEach(message => {
+                    appendToDispatchMessages(message);
+                });
+            }
+        });
+
+        eventSource.onerror = () => {
+            console.error('SSE connection error');
+            // Try to reconnect after a delay
+            setTimeout(() => {
+                eventSource.close();
+                const newEventSource = new EventSource('/api/events');
+                eventSource = newEventSource;
+            }, 5000);
+        };
+    </script>
+</body>
+</html>

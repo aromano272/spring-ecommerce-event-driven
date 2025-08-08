@@ -75,6 +75,17 @@
             background-color: #f9f9f9;
             min-height: 100px;
         }
+        .nav-links {
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            margin-right: 15px;
+            color: #4CAF50;
+            text-decoration: none;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -91,7 +102,12 @@
         </div>
     </div>
 
+    <div class="nav-links">
+        <a href="ingester-control.html">Go to Ingester & Transformer Control</a>
+    </div>
+
     <div class="button-container">
+        <h2>Order Management</h2>
         <button id="createOrder">Create Order</button>
         <button id="getOrder" disabled>Get Order</button>
         <div class="button-with-input">
