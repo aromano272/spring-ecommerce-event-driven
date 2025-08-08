@@ -8,4 +8,8 @@ include(
     "inventory",
     "order",
     "supplier",
+
+    "ingester",
+    "transformer",
+    "dispatcher",
 )

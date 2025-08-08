@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.client.RestTemplate
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.util.concurrent.CopyOnWriteArrayList
 
 @RestController
 @RequestMapping("/api")
@@ -27,6 +29,72 @@ class AdminController(
     private val objectMapper: ObjectMapper
 ) {
     private val logger = LoggerFactory.getLogger(AdminController::class.java)
+
+    private val emitters = CopyOnWriteArrayList<SseEmitter>()
+    private val dispatchMessages = mutableListOf<String>()
+
+    @GetMapping("/events")
+    fun events(): SseEmitter {
+        val emitter = SseEmitter(Long.MAX_VALUE)
+        emitters.add(emitter)
+
+        emitter.onCompletion { emitters.remove(emitter) }
+        emitter.onTimeout { emitters.remove(emitter) }
+
+        // Send all existing messages to the new client
+        try {
+            val event = SseEmitter.event()
+                .name("messages")
+                .data(dispatchMessages)
+            emitter.send(event)
+        } catch (e: Exception) {
+            emitter.completeWithError(e)
+        }
+
+        return emitter
+    }
+
+    @PostMapping("/ingester/start")
+    fun startIngester(@RequestParam delay: Int): ResponseEntity<String> {
+        logger.info("Starting ingester with delay: $delay")
+
+        val ingesterUrl = "http://localhost:8083/ingester/start?delay=$delay"
+        try {
+            restTemplate.postForEntity(ingesterUrl, null, String::class.java)
+            return ResponseEntity.ok("Ingester started with delay: $delay")
+        } catch (e: Exception) {
+            logger.error("Error starting ingester: ${e.message}")
+            return ResponseEntity.badRequest().body("Error starting ingester: ${e.message}")
+        }
+    }
+
+    @PostMapping("/ingester/stop")
+    fun stopIngester(): ResponseEntity<String> {
+        logger.info("Stopping ingester")
+
+        val ingesterUrl = "http://localhost:8083/ingester/stop"
+        try {
+            restTemplate.postForEntity(ingesterUrl, null, String::class.java)
+            return ResponseEntity.ok("Ingester stopped")
+        } catch (e: Exception) {
+            logger.error("Error stopping ingester: ${e.message}")
+            return ResponseEntity.badRequest().body("Error stopping ingester: ${e.message}")
+        }
+    }
+
+    @PostMapping("/transformer/work-sleep")
+    fun setTransformerWorkSleep(@RequestParam delay: Long): ResponseEntity<String> {
+        logger.info("Setting transformer work sleep to: $delay")
+
+        val transformerUrl = "http://localhost:8084/transformer/work-sleep?delay=$delay"
+        try {
+            restTemplate.postForEntity(transformerUrl, null, String::class.java)
+            return ResponseEntity.ok("Transformer work sleep set to: $delay")
+        } catch (e: Exception) {
+            logger.error("Error setting transformer work sleep: ${e.message}")
+            return ResponseEntity.badRequest().body("Error setting transformer work sleep: ${e.message}")
+        }
+    }
 
     @PostMapping("/order/create")
     fun createOrder(@RequestParam userId: Int): ResponseEntity<String> {
