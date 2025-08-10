@@ -81,7 +81,7 @@
 </head>
 <body>
     <h1>Ingester & Transformer Control</h1>
-    
+
     <div class="nav-links">
         <a href="index.html">Back to Main Dashboard</a>
     </div>
@@ -171,19 +171,19 @@
 
         // Function to append to the dispatch messages
         function appendToDispatchMessages(message) {
-            const dispatchMessagesDiv = document.getElementById('dispatchMessages');
-            const currentContent = dispatchMessagesDiv.innerHTML;
+            const div = document.getElementById('dispatchMessages');
+            const p = document.createElement("p");
+            p.innerHTML = `<p><pre>${message}</pre></p>`
+            div.append(p)
 
-            // If it's the initial placeholder text, replace it
-            if (currentContent.includes('Dispatch messages will appear here...')) {
-                dispatchMessagesDiv.innerHTML = `<pre>${message}</pre>`;
-            } else {
-                // Otherwise append with a separator
-                dispatchMessagesDiv.innerHTML = `${currentContent}<hr><pre>${message}</pre>`;
+            // Limit to 1000 messages
+            const children = div.children;
+            while (children.length > 1000) {
+                div.removeChild(children[0]);
             }
 
             // Scroll to the bottom of the dispatch messages div
-            dispatchMessagesDiv.scrollTop = dispatchMessagesDiv.scrollHeight;
+            div.scrollTop = div.scrollHeight;
         }
 
         // Connect to SSE endpoint for dispatch messages
@@ -196,8 +196,8 @@
         eventSource.addEventListener('messages', event => {
             const messages = JSON.parse(event.data);
             if (messages.length > 0) {
-                const dispatchMessagesDiv = document.getElementById('dispatchMessages');
-                dispatchMessagesDiv.innerHTML = ''; // Clear the div
+                // const dispatchMessagesDiv = document.getElementById('dispatchMessages');
+                // dispatchMessagesDiv.innerHTML = ''; // Clear the div
 
                 messages.forEach(message => {
                     appendToDispatchMessages(message);

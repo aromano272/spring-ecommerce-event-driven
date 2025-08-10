@@ -70,23 +70,23 @@ class ReadyToTransformListener(
 
     private val logger: Logger = LoggerFactory.getLogger(ReadyToTransformListener::class.java)
 
-    @RabbitListener(queues = ["ready-to-transform-queue"])
+    @RabbitListener(queues = ["ready-to-transform-queue"], concurrency = "3-30")
     fun listener(message: Message) {
-        val body = message.body.toString()
+        val body = message.body.toString(Charsets.UTF_8)
         val (id, timestamp) = body.split(":").map { it.toLong() }
         logger.info("Received message $body")
         work()
         logger.info("Processed message $body")
-        dispatch(id, timestamp)
+        dispatch(body)
     }
 
     private fun work() {
         Thread.sleep(Globals.WORK_SLEEP)
     }
 
-    private fun dispatch(ingestedTimestamp: Long, id: Long) {
+    private fun dispatch(body: String) {
         val now = System.currentTimeMillis()
-        val message = "$id:$ingestedTimestamp:$now"
+        val message = "$body:$now"
         template.send(
             AmqpDef.TRANSFORMER_EXCHANGE_FANOUT,
             "",

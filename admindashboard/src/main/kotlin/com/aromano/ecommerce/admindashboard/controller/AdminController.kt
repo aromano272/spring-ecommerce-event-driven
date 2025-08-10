@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 @RestController
 @RequestMapping("/api")
@@ -33,30 +36,55 @@ class AdminController(
     private val emitters = CopyOnWriteArrayList<SseEmitter>()
     private val dispatchMessages = mutableListOf<String>()
 
-    fun addDispatchMessage(message: String) {
-        dispatchMessages.add(message)
-        // Keep only the last 100 messages
-        if (dispatchMessages.size > 100) {
-            dispatchMessages.removeAt(0)
+    // Buffer for collecting messages before sending them in batches
+    private val messageBuffer = CopyOnWriteArrayList<String>()
+
+    // Scheduler for sending batched messages
+    private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+
+    init {
+        // Schedule task to send batched messages every 100ms
+        scheduler.scheduleAtFixedRate(this::sendBatchedMessages, 0, 100, TimeUnit.MILLISECONDS)
+    }
+
+    private fun sendBatchedMessages() {
+        if (messageBuffer.isEmpty() || emitters.isEmpty()) {
+            return
         }
 
-        // Send the message to all connected clients
+        // Create a copy of the buffer and clear it
+        val messagesToSend = ArrayList(messageBuffer)
+        messageBuffer.clear()
+
+        // Send the batched messages to all connected clients
         val failedEmitters = mutableListOf<SseEmitter>()
 
         emitters.forEach { emitter ->
             try {
                 val event = SseEmitter.event()
-                    .name("message")
-                    .data(message)
+                    .name("messages")
+                    .data(messagesToSend)
                 emitter.send(event)
             } catch (e: Exception) {
-                logger.error("Error sending message to client: ${e.message}")
+                logger.error("Error sending batched messages to client: ${e.message}")
                 failedEmitters.add(emitter)
             }
         }
 
         // Remove failed emitters
         emitters.removeAll(failedEmitters)
+    }
+
+    fun addDispatchMessage(message: String) {
+        // Add message to the history
+        dispatchMessages.add(message)
+        // Keep only the last 100 messages
+        if (dispatchMessages.size > 100) {
+            dispatchMessages.removeAt(0)
+        }
+
+        // Add message to the buffer for batched sending
+        messageBuffer.add(message)
     }
 
     @GetMapping("/events")
@@ -68,13 +96,16 @@ class AdminController(
         emitter.onTimeout { emitters.remove(emitter) }
 
         // Send all existing messages to the new client
-        try {
-            val event = SseEmitter.event()
-                .name("messages")
-                .data(dispatchMessages)
-            emitter.send(event)
-        } catch (e: Exception) {
-            emitter.completeWithError(e)
+        if (dispatchMessages.isNotEmpty()) {
+            try {
+                val event = SseEmitter.event()
+                    .name("messages")
+                    .data(dispatchMessages)
+                emitter.send(event)
+            } catch (e: Exception) {
+                logger.error("Error sending initial messages to client: ${e.message}")
+                emitter.completeWithError(e)
+            }
         }
 
         return emitter

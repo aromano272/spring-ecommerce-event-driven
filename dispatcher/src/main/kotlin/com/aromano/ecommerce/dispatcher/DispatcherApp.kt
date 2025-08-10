@@ -45,7 +45,7 @@ class ReadyToDispatchListener(
     @RabbitListener(queues = ["ready-to-dispatch-queue"])
     // TODO(aromano): test with suspend
     fun listener(message: Message) {
-        val body = message.body.toString()
+        val body = message.body.toString(Charsets.UTF_8)
         val (id, ingestedAt, transformedAt) = body.split(":").map { it.toLong() }
 
         logger.info("Received message $body")
