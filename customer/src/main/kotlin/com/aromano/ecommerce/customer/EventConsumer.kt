@@ -22,7 +22,7 @@ class EventConsumer(
     @Bean
     fun topicCustomerCommands() = TopicBuilder.name("customer-commands").partitions(10).build()
 
-    @KafkaListener(topics = ["customer-commands"], groupId = "costumer-commands")
+    @KafkaListener(topics = ["customer-commands"], groupId = "costumer-commands", concurrency = "10")
     suspend fun handleCustomerCommands(@Payload payload: String) {
         logger.info("handleCustomerCommands payload: $payload")
         val event: KafkaEvent = objectMapper.toValue(

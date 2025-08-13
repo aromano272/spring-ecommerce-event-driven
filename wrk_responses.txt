@@ -1,12 +1,12 @@
-Total requests (summary): 4727
+Total requests (summary): 29534
 
 FIRST RESPONSE:
 Status: 200
-Body: {"id":400152,"userId":1,"state":"IN_PROGRESS","products":[{"id":1,"name":"name 1","price":83},{"id":2,"name":"name 2","price":73}]}
+Body: {"id":427238,"userId":1,"state":"IN_PROGRESS","products":[{"id":1,"name":"name 1","price":83},{"id":2,"name":"name 2","price":73}]}
 
 
 LAST RESPONSE:
 Status: 200
-Body: {"id":404136,"userId":1,"state":"IN_PROGRESS","products":[{"id":1,"name":"name 1","price":83},{"id":2,"name":"name 2","price":73}]}
+Body: {"id":456701,"userId":1,"state":"IN_PROGRESS","products":[{"id":1,"name":"name 1","price":83},{"id":2,"name":"name 2","price":73}]}
 
 

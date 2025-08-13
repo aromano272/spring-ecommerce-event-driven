@@ -56,7 +56,7 @@ class SagaRunner(
     @Bean
     fun topicCustomerCommands() = TopicBuilder.name("customer-commands").partitions(10).build()
 
-    @KafkaListener(topics = ["inventory-events"], groupId = "saga-runner")
+    @KafkaListener(topics = ["inventory-events"], groupId = "saga-runner", concurrency = "10")
     suspend fun handleInventoryEvents(@Payload payload: String) {
         logger.info("handleInventoryEvents thread: ${Thread.currentThread()}")
         logger.info("handleInventoryEvents payload: $payload")
@@ -73,7 +73,7 @@ class SagaRunner(
         mem[event.sagaId]?.handleEvent(event)
     }
 
-    @KafkaListener(topics = ["customer-events"], groupId = "saga-runner")
+    @KafkaListener(topics = ["customer-events"], groupId = "saga-runner", concurrency = "10")
     suspend fun handleCustomerEvents(@Payload payload: String) {
         logger.info("handleCustomerEvents thread: ${Thread.currentThread()}")
         logger.info("handleCustomerEvents payload: $payload")

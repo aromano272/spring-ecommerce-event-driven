@@ -30,6 +30,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8")
     implementation("org.springframework:spring-context")
     implementation("io.projectreactor:reactor-core")
+    implementation("de.codecentric:spring-boot-admin-starter-client:3.3.4")
 
     implementation(libs.jdbi.core)
     implementation(libs.jdbi.kotlin)
