@@ -1,8 +1,6 @@
 package com.aromano.ecommerce.transformer
 
 import com.aromano.ecommerce.common.AmqpDef
-import jdk.internal.joptsimple.internal.Messages.message
-import jdk.jfr.internal.event.EventConfiguration.timestamp
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.amqp.core.AmqpTemplate

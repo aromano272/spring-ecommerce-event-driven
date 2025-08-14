@@ -1,4 +1,12 @@
 rootProject.name = "ecommerce-event-sourcing"
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
 include(
     "accounting",
     "admindashboard",

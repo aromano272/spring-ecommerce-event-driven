@@ -41,9 +41,73 @@ services:
 
   rabbitmq:
     image: rabbitmq:4.1.2-management-alpine
+    container_name: ecommerce-rabbitmq
     ports:
       - "5672:5672"    # AMQP port
       - "15672:15672"  # Management UI
+
+  admindashboard:
+    build:
+      context: .
+      dockerfile: admindashboard/Dockerfile
+      no_cache: true
+    container_name: ecommerce-admindashboard
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+      - rabbitmq
+      - postgres
+
+  dispatcher:
+    build:
+      context: .
+      dockerfile: dispatcher/Dockerfile
+      no_cache: true
+    container_name: ecommerce-dispatcher
+    ports:
+      - "8081:8081"
+    depends_on:
+      - kafka
+      - rabbitmq
+      - postgres
+
+  ingester:
+    build:
+      context: .
+      dockerfile: ingester/Dockerfile
+      no_cache: true
+    container_name: ecommerce-ingester
+    ports:
+      - "8082:8082"
+    depends_on:
+      - kafka
+      - rabbitmq
+      - postgres
+
+  transformer:
+    build:
+      context: .
+      dockerfile: transformer/Dockerfile
+      no_cache: true
+    container_name: ecommerce-transformer
+    ports:
+      - "8083:8083"
+    depends_on:
+      - kafka
+      - rabbitmq
+      - postgres
+
+  order:
+    build:
+      context: ./order
+    container_name: ecommerce-order
+    ports:
+      - "8081:8081"
+    depends_on:
+      - kafka
+      - rabbitmq
+      - postgres
 
 volumes:
   pgdata:

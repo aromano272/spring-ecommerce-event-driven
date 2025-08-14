@@ -115,8 +115,18 @@ class AdminController(
     fun startIngester(@RequestParam delay: Int): ResponseEntity<String> {
         logger.info("Starting ingester with delay: $delay")
 
-        val ingesterUrl = "http://localhost:8081/ingester/start?delay=$delay"
         try {
+            // First ensure the container is running
+            val command = "docker start ecommerce-ingester"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            if (exitCode != 0) {
+                return ResponseEntity.badRequest().body("Error starting ingester container: Exit code $exitCode")
+            }
+
+            // Then set the delay
+            val ingesterUrl = "http://localhost:8081/ingester/start?delay=$delay"
             restTemplate.postForEntity(ingesterUrl, null, String::class.java)
             return ResponseEntity.ok("Ingester started with delay: $delay")
         } catch (e: Exception) {
@@ -129,10 +139,25 @@ class AdminController(
     fun stopIngester(): ResponseEntity<String> {
         logger.info("Stopping ingester")
 
-        val ingesterUrl = "http://localhost:8081/ingester/stop"
         try {
-            restTemplate.postForEntity(ingesterUrl, null, String::class.java)
-            return ResponseEntity.ok("Ingester stopped")
+            // First try to stop the ingester service gracefully
+            try {
+                val ingesterUrl = "http://localhost:8081/ingester/stop"
+                restTemplate.postForEntity(ingesterUrl, null, String::class.java)
+            } catch (e: Exception) {
+                logger.warn("Could not stop ingester service gracefully: ${e.message}. Will try to stop the container.")
+            }
+
+            // Then stop the container
+            val command = "docker stop ecommerce-ingester"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("Ingester stopped successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error stopping ingester container: Exit code $exitCode")
+            }
         } catch (e: Exception) {
             logger.error("Error stopping ingester: ${e.message}")
             return ResponseEntity.badRequest().body("Error stopping ingester: ${e.message}")
@@ -150,6 +175,206 @@ class AdminController(
         } catch (e: Exception) {
             logger.error("Error setting transformer work sleep: ${e.message}")
             return ResponseEntity.badRequest().body("Error setting transformer work sleep: ${e.message}")
+        }
+    }
+
+    @PostMapping("/transformer/start")
+    fun startTransformer(): ResponseEntity<String> {
+        logger.info("Starting transformer service")
+
+        try {
+            val command = "docker start ecommerce-transformer"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("Transformer service started successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error starting transformer service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error starting transformer service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error starting transformer service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/transformer/stop")
+    fun stopTransformer(): ResponseEntity<String> {
+        logger.info("Stopping transformer service")
+
+        try {
+            val command = "docker stop ecommerce-transformer"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("Transformer service stopped successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error stopping transformer service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error stopping transformer service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error stopping transformer service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/dispatcher/start")
+    fun startDispatcher(): ResponseEntity<String> {
+        logger.info("Starting dispatcher service")
+
+        try {
+            val command = "docker start ecommerce-dispatcher"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("Dispatcher service started successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error starting dispatcher service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error starting dispatcher service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error starting dispatcher service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/dispatcher/stop")
+    fun stopDispatcher(): ResponseEntity<String> {
+        logger.info("Stopping dispatcher service")
+
+        try {
+            val command = "docker stop ecommerce-dispatcher"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("Dispatcher service stopped successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error stopping dispatcher service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error stopping dispatcher service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error stopping dispatcher service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/kafka/start")
+    fun startKafka(): ResponseEntity<String> {
+        logger.info("Starting Kafka service")
+
+        try {
+            val command = "docker start kafka"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("Kafka service started successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error starting Kafka service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error starting Kafka service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error starting Kafka service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/kafka/stop")
+    fun stopKafka(): ResponseEntity<String> {
+        logger.info("Stopping Kafka service")
+
+        try {
+            val command = "docker stop kafka"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("Kafka service stopped successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error stopping Kafka service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error stopping Kafka service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error stopping Kafka service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/rabbitmq/start")
+    fun startRabbitmq(): ResponseEntity<String> {
+        logger.info("Starting RabbitMQ service")
+
+        try {
+            val command = "docker start ecommerce-rabbitmq"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("RabbitMQ service started successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error starting RabbitMQ service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error starting RabbitMQ service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error starting RabbitMQ service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/rabbitmq/stop")
+    fun stopRabbitmq(): ResponseEntity<String> {
+        logger.info("Stopping RabbitMQ service")
+
+        try {
+            val command = "docker stop ecommerce-rabbitmq"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("RabbitMQ service stopped successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error stopping RabbitMQ service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error stopping RabbitMQ service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error stopping RabbitMQ service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/postgres/start")
+    fun startPostgres(): ResponseEntity<String> {
+        logger.info("Starting PostgreSQL service")
+
+        try {
+            val command = "docker start ecommerce-postgres"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("PostgreSQL service started successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error starting PostgreSQL service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error starting PostgreSQL service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error starting PostgreSQL service: ${e.message}")
+        }
+    }
+
+    @PostMapping("/postgres/stop")
+    fun stopPostgres(): ResponseEntity<String> {
+        logger.info("Stopping PostgreSQL service")
+
+        try {
+            val command = "docker stop ecommerce-postgres"
+            val process = Runtime.getRuntime().exec(command)
+            val exitCode = process.waitFor()
+
+            return if (exitCode == 0) {
+                ResponseEntity.ok("PostgreSQL service stopped successfully")
+            } else {
+                ResponseEntity.badRequest().body("Error stopping PostgreSQL service: Exit code $exitCode")
+            }
+        } catch (e: Exception) {
+            logger.error("Error stopping PostgreSQL service: ${e.message}")
+            return ResponseEntity.badRequest().body("Error stopping PostgreSQL service: ${e.message}")
         }
     }
 

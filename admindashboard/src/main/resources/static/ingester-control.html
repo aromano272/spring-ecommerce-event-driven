@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ingester & Transformer Control</title>
+    <title>Service Control Panel</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -80,23 +80,45 @@
     </style>
 </head>
 <body>
-    <h1>Ingester & Transformer Control</h1>
+    <h1>Service Control Panel</h1>
 
     <div class="nav-links">
         <a href="index.html">Back to Main Dashboard</a>
     </div>
 
     <div class="button-container">
-        <h2>Ingester & Transformer Control</h2>
+        <h2>Service Control</h2>
+
+        <h3>Ingester Service</h3>
         <div class="button-with-input">
             <button id="startIngester">Start Ingester</button>
             <input type="number" id="ingesterDelay" placeholder="Delay (ms)" value="1000">
         </div>
         <button id="stopIngester">Stop Ingester</button>
+
+        <h3>Transformer Service</h3>
+        <button id="startTransformer">Start Transformer</button>
+        <button id="stopTransformer">Stop Transformer</button>
         <div class="button-with-input">
             <button id="setTransformerWorkSleep">Set Transformer Work Sleep</button>
             <input type="number" id="transformerDelay" placeholder="Delay (ms)" value="100">
         </div>
+
+        <h3>Dispatcher Service</h3>
+        <button id="startDispatcher">Start Dispatcher</button>
+        <button id="stopDispatcher">Stop Dispatcher</button>
+
+        <h3>Kafka Service</h3>
+        <button id="startKafka">Start Kafka</button>
+        <button id="stopKafka">Stop Kafka</button>
+
+        <h3>RabbitMQ Service</h3>
+        <button id="startRabbitmq">Start RabbitMQ</button>
+        <button id="stopRabbitmq">Stop RabbitMQ</button>
+
+        <h3>PostgreSQL Service</h3>
+        <button id="startPostgres">Start PostgreSQL</button>
+        <button id="stopPostgres">Stop PostgreSQL</button>
     </div>
 
     <h2>Dispatch Messages</h2>
@@ -147,6 +169,136 @@
                 });
                 const data = await response.text();
                 appendToLog(`Button: Set Transformer Work Sleep, Delay: ${delay}ms\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Start Transformer button
+        document.getElementById('startTransformer').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/transformer/start', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Start Transformer\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Stop Transformer button
+        document.getElementById('stopTransformer').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/transformer/stop', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Stop Transformer\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Start Dispatcher button
+        document.getElementById('startDispatcher').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/dispatcher/start', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Start Dispatcher\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Stop Dispatcher button
+        document.getElementById('stopDispatcher').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/dispatcher/stop', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Stop Dispatcher\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Start Kafka button
+        document.getElementById('startKafka').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/kafka/start', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Start Kafka\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Stop Kafka button
+        document.getElementById('stopKafka').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/kafka/stop', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Stop Kafka\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Start RabbitMQ button
+        document.getElementById('startRabbitmq').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/rabbitmq/start', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Start RabbitMQ\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Stop RabbitMQ button
+        document.getElementById('stopRabbitmq').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/rabbitmq/stop', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Stop RabbitMQ\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Start PostgreSQL button
+        document.getElementById('startPostgres').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/postgres/start', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Start PostgreSQL\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Stop PostgreSQL button
+        document.getElementById('stopPostgres').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/postgres/stop', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Stop PostgreSQL\n${data}`);
             } catch (error) {
                 appendToLog(`Error: ${error.message}`);
             }
