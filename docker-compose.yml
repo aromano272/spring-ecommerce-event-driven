@@ -58,6 +58,8 @@ services:
       - kafka
       - rabbitmq
       - postgres
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   dispatcher:
     build:
@@ -98,16 +100,16 @@ services:
       - rabbitmq
       - postgres
 
-  order:
-    build:
-      context: ./order
-    container_name: ecommerce-order
-    ports:
-      - "8081:8081"
-    depends_on:
-      - kafka
-      - rabbitmq
-      - postgres
+#  order:
+#    build:
+#      context: ./order
+#    container_name: ecommerce-order
+#    ports:
+#      - "8081:8081"
+#    depends_on:
+#      - kafka
+#      - rabbitmq
+#      - postgres
 
 volumes:
   pgdata:

@@ -67,7 +67,7 @@ class KafkaDispatchListener(
 
     @KafkaListener(topics = ["topic-dispatch"])
     fun listen(message: String) {
-        logger.info("Received message $message")
+//        logger.info("Received message $message")
 
         adminController.addDispatchMessage(message)
     }

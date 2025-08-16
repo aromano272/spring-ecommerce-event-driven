@@ -8,7 +8,12 @@ import com.aromano.ecommerce.admindashboard.events.SubmitReservedBalanceSuccess
 import com.aromano.ecommerce.admindashboard.events.SubmitReservedBalanceFailed
 import com.aromano.ecommerce.admindashboard.events.ReleasedReservedBalanceSuccess
 import com.aromano.ecommerce.admindashboard.events.ReleasedReservedBalanceFailed
+import com.aromano.ecommerce.common.domain.Totals
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.core.DefaultDockerClientConfig
+import com.github.dockerjava.core.DockerClientImpl
+import com.github.dockerjava.okhttp.OkDockerHttpClient
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.kafka.core.KafkaTemplate
@@ -19,10 +24,13 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import reactor.core.publisher.Mono.delay
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.jvm.java
 
 @RestController
 @RequestMapping("/api")
@@ -35,23 +43,41 @@ class AdminController(
 
     private val emitters = CopyOnWriteArrayList<SseEmitter>()
     private val dispatchMessages = mutableListOf<String>()
+    private var totalIngested: Totals? = null
+    private var totalTransformed: Totals? = null
+    private var totalDispatched: Totals? = null
 
     // Buffer for collecting messages before sending them in batches
     private val messageBuffer = CopyOnWriteArrayList<String>()
 
     // Scheduler for sending batched messages
-    private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    private val sseScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+    private val totalsScheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
+
+    private val docker: DockerClient = run {
+        val cfg = DefaultDockerClientConfig.createDefaultConfigBuilder()
+            .build()
+        val http = OkDockerHttpClient.Builder()
+            .dockerHost(cfg.dockerHost)
+            .sslConfig(cfg.sslConfig)
+            .build()
+        DockerClientImpl.getInstance(cfg, http)
+    }
 
     init {
         // Schedule task to send batched messages every 100ms
-        scheduler.scheduleAtFixedRate(this::sendBatchedMessages, 0, 100, TimeUnit.MILLISECONDS)
+        sseScheduler.scheduleAtFixedRate(this::sendBatchedMessages, 0, 100, TimeUnit.MILLISECONDS)
+        totalsScheduler.scheduleAtFixedRate(this::getTotals, 0, 500, TimeUnit.MILLISECONDS)
     }
 
-    private fun sendBatchedMessages() {
-        if (messageBuffer.isEmpty() || emitters.isEmpty()) {
-            return
-        }
+    data class SSEPayload(
+        val messages: List<String>,
+        val totalIngested: Totals?,
+        val totalTransformed: Totals?,
+        val totalDispatched: Totals?,
+    )
 
+    private fun sendBatchedMessages() {
         // Create a copy of the buffer and clear it
         val messagesToSend = ArrayList(messageBuffer)
         messageBuffer.clear()
@@ -61,9 +87,15 @@ class AdminController(
 
         emitters.forEach { emitter ->
             try {
+                val payload = SSEPayload(
+                    messages = messagesToSend,
+                    totalIngested = totalIngested,
+                    totalTransformed = totalTransformed,
+                    totalDispatched = totalDispatched,
+                )
                 val event = SseEmitter.event()
                     .name("messages")
-                    .data(messagesToSend)
+                    .data(payload)
                 emitter.send(event)
             } catch (e: Exception) {
                 logger.error("Error sending batched messages to client: ${e.message}")
@@ -73,6 +105,39 @@ class AdminController(
 
         // Remove failed emitters
         emitters.removeAll(failedEmitters)
+    }
+
+    private fun getTotals() {
+        val dispatcherUrl = "http://dispatcher:8081/dispatcher/total"
+        val ingesterUrl = "http://ingester:8082/ingester/total"
+        val transformerUrl = "http://transformer:8083/transformer/total"
+        try {
+            val start = System.currentTimeMillis()
+            val response = restTemplate.getForEntity(dispatcherUrl, Totals::class.java)
+            totalDispatched = response.body
+            val delta = System.currentTimeMillis() - start
+            logger.info("dispatcher totals took: ${delta}ms $totalDispatched")
+        } catch (e: Exception) {
+            logger.error("Error getting dispatcher totals: ${e.message}")
+        }
+        try {
+            val start = System.currentTimeMillis()
+            val response = restTemplate.getForEntity(ingesterUrl, Totals::class.java)
+            totalIngested = response.body
+            val delta = System.currentTimeMillis() - start
+            logger.info("ingester totals took: ${delta}ms $totalIngested")
+        } catch (e: Exception) {
+            logger.error("Error getting ingester totals: ${e.message}")
+        }
+        try {
+            val start = System.currentTimeMillis()
+            val response = restTemplate.getForEntity(transformerUrl, Totals::class.java)
+            totalTransformed = response.body
+            val delta = System.currentTimeMillis() - start
+            logger.info("transformer totals took: ${delta}ms $totalTransformed")
+        } catch (e: Exception) {
+            logger.error("Error getting transformer totals: ${e.message}")
+        }
     }
 
     fun addDispatchMessage(message: String) {
@@ -111,64 +176,85 @@ class AdminController(
         return emitter
     }
 
-    @PostMapping("/ingester/start")
-    fun startIngester(@RequestParam delay: Int): ResponseEntity<String> {
+    private fun findContainerId(name: String): String? {
+        val list = docker.listContainersCmd().withShowAll(true).exec()
+        val match = list.find { container ->
+            container.names.any { it.trim('/').equals(name, true) }
+        }
+        return match?.id
+    }
+
+    private fun startContainer(name: String): ResponseEntity<String> {
+        val id = findContainerId(name)
+            ?: return ResponseEntity.badRequest().body("$name container not found")
+        try {
+            docker.startContainerCmd(id).exec()
+            return ResponseEntity.ok(null)
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+            return ResponseEntity.badRequest().body("$name container failed to start")
+        }
+    }
+
+    private fun stopContainer(name: String): ResponseEntity<String> {
+        val id = findContainerId(name)
+            ?: return ResponseEntity.badRequest().body("$name container not found")
+        try {
+            docker.stopContainerCmd(id).exec()
+            return ResponseEntity.ok(null)
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+            return ResponseEntity.badRequest().body("$name container failed to stop")
+        }
+    }
+
+    @PostMapping("/ingester/startingestion")
+    fun startIngesterIngestion(@RequestParam delay: Int): ResponseEntity<String> {
         logger.info("Starting ingester with delay: $delay")
 
+        val ingesterUrl = "http://ingester:8082/ingester/start?delay=$delay"
         try {
-            // First ensure the container is running
-            val command = "docker start ecommerce-ingester"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            if (exitCode != 0) {
-                return ResponseEntity.badRequest().body("Error starting ingester container: Exit code $exitCode")
-            }
-
-            // Then set the delay
-            val ingesterUrl = "http://localhost:8081/ingester/start?delay=$delay"
             restTemplate.postForEntity(ingesterUrl, null, String::class.java)
-            return ResponseEntity.ok("Ingester started with delay: $delay")
+            return ResponseEntity.ok("ingester start ingestion set to: $delay")
         } catch (e: Exception) {
-            logger.error("Error starting ingester: ${e.message}")
-            return ResponseEntity.badRequest().body("Error starting ingester: ${e.message}")
+            logger.error("Error setting ingester start ingestion: ${e.message}")
+            return ResponseEntity.badRequest().body("Error setting ingester start ingestion: ${e.message}")
         }
+    }
+
+    @PostMapping("/ingester/stopingestion")
+    fun stopIngesterIngestion(): ResponseEntity<String> {
+        logger.info("stoping ingester with delay")
+
+        val ingesterUrl = "http://ingester:8082/ingester/stop"
+        try {
+            restTemplate.postForEntity(ingesterUrl, null, String::class.java)
+            return ResponseEntity.ok("ingester stop ingestion")
+        } catch (e: Exception) {
+            logger.error("Error setting ingester stop ingestion: ${e.message}")
+            return ResponseEntity.badRequest().body("Error setting ingester stop ingestion: ${e.message}")
+        }
+    }
+
+    @PostMapping("/ingester/start")
+    fun startIngester(): ResponseEntity<String> {
+        logger.info("Starting ingester")
+
+        return startContainer("ecommerce-ingester")
     }
 
     @PostMapping("/ingester/stop")
     fun stopIngester(): ResponseEntity<String> {
         logger.info("Stopping ingester")
 
-        try {
-            // First try to stop the ingester service gracefully
-            try {
-                val ingesterUrl = "http://localhost:8081/ingester/stop"
-                restTemplate.postForEntity(ingesterUrl, null, String::class.java)
-            } catch (e: Exception) {
-                logger.warn("Could not stop ingester service gracefully: ${e.message}. Will try to stop the container.")
-            }
-
-            // Then stop the container
-            val command = "docker stop ecommerce-ingester"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("Ingester stopped successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error stopping ingester container: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error stopping ingester: ${e.message}")
-            return ResponseEntity.badRequest().body("Error stopping ingester: ${e.message}")
-        }
+        return stopContainer("ecommerce-ingester")
     }
 
     @PostMapping("/transformer/work-sleep")
     fun setTransformerWorkSleep(@RequestParam delay: Long): ResponseEntity<String> {
         logger.info("Setting transformer work sleep to: $delay")
 
-        val transformerUrl = "http://localhost:8083/transformer/work-sleep?delay=$delay"
+        val transformerUrl = "http://transformer:8083/transformer/work-sleep?delay=$delay"
         try {
             restTemplate.postForEntity(transformerUrl, null, String::class.java)
             return ResponseEntity.ok("Transformer work sleep set to: $delay")
@@ -182,200 +268,70 @@ class AdminController(
     fun startTransformer(): ResponseEntity<String> {
         logger.info("Starting transformer service")
 
-        try {
-            val command = "docker start ecommerce-transformer"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("Transformer service started successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error starting transformer service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error starting transformer service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error starting transformer service: ${e.message}")
-        }
+        return startContainer("ecommerce-transformer")
     }
 
     @PostMapping("/transformer/stop")
     fun stopTransformer(): ResponseEntity<String> {
         logger.info("Stopping transformer service")
 
-        try {
-            val command = "docker stop ecommerce-transformer"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("Transformer service stopped successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error stopping transformer service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error stopping transformer service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error stopping transformer service: ${e.message}")
-        }
+        return stopContainer("ecommerce-transformer")
     }
 
     @PostMapping("/dispatcher/start")
     fun startDispatcher(): ResponseEntity<String> {
         logger.info("Starting dispatcher service")
 
-        try {
-            val command = "docker start ecommerce-dispatcher"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("Dispatcher service started successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error starting dispatcher service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error starting dispatcher service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error starting dispatcher service: ${e.message}")
-        }
+        return startContainer("ecommerce-dispatcher")
     }
 
     @PostMapping("/dispatcher/stop")
     fun stopDispatcher(): ResponseEntity<String> {
         logger.info("Stopping dispatcher service")
 
-        try {
-            val command = "docker stop ecommerce-dispatcher"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("Dispatcher service stopped successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error stopping dispatcher service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error stopping dispatcher service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error stopping dispatcher service: ${e.message}")
-        }
+        return stopContainer("ecommerce-dispatcher")
     }
 
     @PostMapping("/kafka/start")
     fun startKafka(): ResponseEntity<String> {
         logger.info("Starting Kafka service")
 
-        try {
-            val command = "docker start kafka"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("Kafka service started successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error starting Kafka service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error starting Kafka service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error starting Kafka service: ${e.message}")
-        }
+        return startContainer("kafka")
     }
 
     @PostMapping("/kafka/stop")
     fun stopKafka(): ResponseEntity<String> {
         logger.info("Stopping Kafka service")
 
-        try {
-            val command = "docker stop kafka"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("Kafka service stopped successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error stopping Kafka service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error stopping Kafka service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error stopping Kafka service: ${e.message}")
-        }
+        return stopContainer("kafka")
     }
 
     @PostMapping("/rabbitmq/start")
     fun startRabbitmq(): ResponseEntity<String> {
         logger.info("Starting RabbitMQ service")
 
-        try {
-            val command = "docker start ecommerce-rabbitmq"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("RabbitMQ service started successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error starting RabbitMQ service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error starting RabbitMQ service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error starting RabbitMQ service: ${e.message}")
-        }
+        return startContainer("ecommerce-rabbitmq")
     }
 
     @PostMapping("/rabbitmq/stop")
     fun stopRabbitmq(): ResponseEntity<String> {
         logger.info("Stopping RabbitMQ service")
 
-        try {
-            val command = "docker stop ecommerce-rabbitmq"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("RabbitMQ service stopped successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error stopping RabbitMQ service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error stopping RabbitMQ service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error stopping RabbitMQ service: ${e.message}")
-        }
+        return stopContainer("ecommerce-rabbitmq")
     }
 
     @PostMapping("/postgres/start")
     fun startPostgres(): ResponseEntity<String> {
         logger.info("Starting PostgreSQL service")
 
-        try {
-            val command = "docker start ecommerce-postgres"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("PostgreSQL service started successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error starting PostgreSQL service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error starting PostgreSQL service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error starting PostgreSQL service: ${e.message}")
-        }
+        return startContainer("ecommerce-postgres")
     }
 
     @PostMapping("/postgres/stop")
     fun stopPostgres(): ResponseEntity<String> {
         logger.info("Stopping PostgreSQL service")
 
-        try {
-            val command = "docker stop ecommerce-postgres"
-            val process = Runtime.getRuntime().exec(command)
-            val exitCode = process.waitFor()
-
-            return if (exitCode == 0) {
-                ResponseEntity.ok("PostgreSQL service stopped successfully")
-            } else {
-                ResponseEntity.badRequest().body("Error stopping PostgreSQL service: Exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            logger.error("Error stopping PostgreSQL service: ${e.message}")
-            return ResponseEntity.badRequest().body("Error stopping PostgreSQL service: ${e.message}")
-        }
+        return stopContainer("ecommerce-postgres")
     }
 
     @PostMapping("/order/create")
@@ -437,7 +393,7 @@ class AdminController(
     }
 
     @PostMapping("/events/inventory-decrement-failed")
-    fun DecrementIntentoryFailed(
+    fun decrementIntentoryFailed(
         @RequestParam orderId: Int,
         @RequestParam sagaId: String
     ): ResponseEntity<String> {

@@ -90,11 +90,13 @@
         <h2>Service Control</h2>
 
         <h3>Ingester Service</h3>
+        <button id="startIngester">Start Ingester</button>
+        <button id="stopIngester">Stop Ingester</button>
         <div class="button-with-input">
-            <button id="startIngester">Start Ingester</button>
+            <button id="startIngesterIngestion">Start Ingester ingestion</button>
             <input type="number" id="ingesterDelay" placeholder="Delay (ms)" value="1000">
         </div>
-        <button id="stopIngester">Stop Ingester</button>
+        <button id="stopIngesterIngestion">Stop Ingester ingestion</button>
 
         <h3>Transformer Service</h3>
         <button id="startTransformer">Start Transformer</button>
@@ -122,6 +124,9 @@
     </div>
 
     <h2>Dispatch Messages</h2>
+    <p id="ingested-count"></p>
+    <p id="transformed-count"></p>
+    <p id="dispatched-count"></p>
     <div id="dispatchMessages" style="height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-bottom: 20px; background-color: #f9f9f9;">
         <p>Dispatch messages will appear here...</p>
     </div>
@@ -134,13 +139,11 @@
         // Start Ingester button
         document.getElementById('startIngester').addEventListener('click', async () => {
             try {
-                const delay = document.getElementById('ingesterDelay').value;
-
-                const response = await fetch(`/api/ingester/start?delay=${delay}`, {
+                const response = await fetch(`/api/ingester`, {
                     method: 'POST'
                 });
                 const data = await response.text();
-                appendToLog(`Button: Start Ingester, Delay: ${delay}ms\n${data}`);
+                appendToLog(`Button: Start Ingester\n${data}`);
             } catch (error) {
                 appendToLog(`Error: ${error.message}`);
             }
@@ -154,6 +157,33 @@
                 });
                 const data = await response.text();
                 appendToLog(`Button: Stop Ingester\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+        // Start Ingester ingestion button
+        document.getElementById('startIngesterIngestion').addEventListener('click', async () => {
+            try {
+                const delay = document.getElementById('ingesterDelay').value;
+
+                const response = await fetch(`/api/ingester/startingestion?delay=${delay}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Start Ingester ingestion, Delay: ${delay}ms\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Stop Ingester ingestion button
+        document.getElementById('stopIngesterIngestion').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/ingester/stopingestion', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Stop Ingester ingestion\n${data}`);
             } catch (error) {
                 appendToLog(`Error: ${error.message}`);
             }
@@ -346,7 +376,8 @@
         });
 
         eventSource.addEventListener('messages', event => {
-            const messages = JSON.parse(event.data);
+            const payload = JSON.parse(event.data);
+            const messages = payload.messages;
             if (messages.length > 0) {
                 // const dispatchMessagesDiv = document.getElementById('dispatchMessages');
                 // dispatchMessagesDiv.innerHTML = ''; // Clear the div
@@ -355,6 +386,10 @@
                     appendToDispatchMessages(message);
                 });
             }
+
+            document.getElementById("ingested-count").textContent = `Ingested - emittedCount: ${payload.totalIngested.emittedCount} maxEmittedCount: ${payload.totalIngested.maxEmittedId}`;
+            document.getElementById("transformed-count").textContent = `Transformed - emittedCount: ${payload.totalTransformed.emittedCount} maxEmittedCount: ${payload.totalTransformed.maxEmittedId}`;
+            document.getElementById("dispatched-count").textContent = `Dispatched - emittedCount: ${payload.totalDispatched.emittedCount} maxEmittedCount: ${payload.totalDispatched.maxEmittedId}`;
         });
 
         eventSource.onerror = () => {
