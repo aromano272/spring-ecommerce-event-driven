@@ -55,7 +55,7 @@ class ReadyToDispatchListener(
 
     private val logger: Logger = LoggerFactory.getLogger(ReadyToDispatchListener::class.java)
 
-    val totals = AtomicReference(Totals(0, 0, emptyList()))
+    val totals = AtomicReference(Totals())
 
     @RabbitListener(queues = ["ready-to-dispatch-queue"])
     // TODO(aromano): test with suspend
@@ -63,13 +63,13 @@ class ReadyToDispatchListener(
         val body = message.body.toString(Charsets.UTF_8)
         val (id, ingestedAt, transformedAt) = body.split(":").map { it.toLong() }
 
-        totals.getAndUpdate(object : UnaryOperator<Totals> {
-            override fun apply(t: Totals): Totals = Totals(
-                emittedCount = t.emittedCount + 1,
-                maxEmittedId = max(t.maxEmittedId, id),
-                emittedIds = t.emittedIds + id,
+        totals.getAndUpdate {
+            Totals(
+                emittedCount = it.emittedCount + 1,
+                maxEmittedId = max(it.maxEmittedId, id),
+//                emittedIds = it.emittedIds + id,
             )
-        })
+        }
 
         logger.info("Received message $body")
 
@@ -87,7 +87,7 @@ class DispatcherController(
 ) {
 
     @GetMapping("/total")
-    fun getTotal(): ResponseEntity<Totals> = ResponseEntity.ok(listener.totals.get())
+    fun getTotal(): ResponseEntity<Totals> = ResponseEntity.ok(listener.totals.getAndUpdate { it.copy(emittedCount = 0) })
 
 }
 

@@ -73,7 +73,7 @@ class TransformerRoutes(
     }
 
     @GetMapping("/total")
-    fun getTotal(): ResponseEntity<Totals> = ResponseEntity.ok(listener.totals.get())
+    fun getTotal(): ResponseEntity<Totals> = ResponseEntity.ok(listener.totals.getAndUpdate { it.copy(emittedCount = 0) })
 
 }
 
@@ -84,7 +84,7 @@ class ReadyToTransformListener(
 
     private val logger: Logger = LoggerFactory.getLogger(ReadyToTransformListener::class.java)
 
-    val totals = AtomicReference(Totals(0, 0, emptyList()))
+    val totals = AtomicReference(Totals())
 
     @RabbitListener(queues = ["ready-to-transform-queue"], concurrency = "3-30")
     fun listener(message: Message) {
@@ -95,13 +95,13 @@ class ReadyToTransformListener(
         logger.info("Processed message $body")
         dispatch(body)
 
-        totals.getAndUpdate(object : UnaryOperator<Totals> {
-            override fun apply(t: Totals): Totals = Totals(
-                emittedCount = t.emittedCount + 1,
-                maxEmittedId = max(t.maxEmittedId, id),
-                emittedIds = t.emittedIds + id,
+        totals.getAndUpdate {
+            Totals(
+                emittedCount = it.emittedCount + 1,
+                maxEmittedId = max(it.maxEmittedId, id),
+//                emittedIds = it.emittedIds + id,
             )
-        })
+        }
     }
 
     private fun work() {

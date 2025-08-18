@@ -89,14 +89,16 @@
     <div class="button-container">
         <h2>Service Control</h2>
 
+        <h3>Provider Service</h3>
+        <div class="button-with-input">
+            <button id="startProvider">Start Provider</button>
+            <input type="number" id="providerDelay" placeholder="Delay (ms)" value="1000">
+        </div>
+        <button id="stopProvider">Stop Provider</button>
+
         <h3>Ingester Service</h3>
         <button id="startIngester">Start Ingester</button>
         <button id="stopIngester">Stop Ingester</button>
-        <div class="button-with-input">
-            <button id="startIngesterIngestion">Start Ingester ingestion</button>
-            <input type="number" id="ingesterDelay" placeholder="Delay (ms)" value="1000">
-        </div>
-        <button id="stopIngesterIngestion">Stop Ingester ingestion</button>
 
         <h3>Transformer Service</h3>
         <button id="startTransformer">Start Transformer</button>
@@ -124,6 +126,7 @@
     </div>
 
     <h2>Dispatch Messages</h2>
+    <p id="provided-count"></p>
     <p id="ingested-count"></p>
     <p id="transformed-count"></p>
     <p id="dispatched-count"></p>
@@ -136,10 +139,38 @@
     </div>
 
     <script>
+        // Start Provider button
+        document.getElementById('startProvider').addEventListener('click', async () => {
+            try {
+                const delay = document.getElementById('providerDelay').value;
+
+                const response = await fetch(`/api/provider/start?delay=${delay}`, {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Start Provider, Delay: ${delay}ms\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
+        // Stop Provider button
+        document.getElementById('stopProvider').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/provider/stop', {
+                    method: 'POST'
+                });
+                const data = await response.text();
+                appendToLog(`Button: Stop Provider\n${data}`);
+            } catch (error) {
+                appendToLog(`Error: ${error.message}`);
+            }
+        });
+
         // Start Ingester button
         document.getElementById('startIngester').addEventListener('click', async () => {
             try {
-                const response = await fetch(`/api/ingester`, {
+                const response = await fetch(`/api/ingester/start`, {
                     method: 'POST'
                 });
                 const data = await response.text();
@@ -161,34 +192,6 @@
                 appendToLog(`Error: ${error.message}`);
             }
         });
-        // Start Ingester ingestion button
-        document.getElementById('startIngesterIngestion').addEventListener('click', async () => {
-            try {
-                const delay = document.getElementById('ingesterDelay').value;
-
-                const response = await fetch(`/api/ingester/startingestion?delay=${delay}`, {
-                    method: 'POST'
-                });
-                const data = await response.text();
-                appendToLog(`Button: Start Ingester ingestion, Delay: ${delay}ms\n${data}`);
-            } catch (error) {
-                appendToLog(`Error: ${error.message}`);
-            }
-        });
-
-        // Stop Ingester ingestion button
-        document.getElementById('stopIngesterIngestion').addEventListener('click', async () => {
-            try {
-                const response = await fetch('/api/ingester/stopingestion', {
-                    method: 'POST'
-                });
-                const data = await response.text();
-                appendToLog(`Button: Stop Ingester ingestion\n${data}`);
-            } catch (error) {
-                appendToLog(`Error: ${error.message}`);
-            }
-        });
-
         // Set Transformer Work Sleep button
         document.getElementById('setTransformerWorkSleep').addEventListener('click', async () => {
             try {
@@ -387,9 +390,10 @@
                 });
             }
 
-            document.getElementById("ingested-count").textContent = `Ingested - emittedCount: ${payload.totalIngested.emittedCount} maxEmittedCount: ${payload.totalIngested.maxEmittedId}`;
-            document.getElementById("transformed-count").textContent = `Transformed - emittedCount: ${payload.totalTransformed.emittedCount} maxEmittedCount: ${payload.totalTransformed.maxEmittedId}`;
-            document.getElementById("dispatched-count").textContent = `Dispatched - emittedCount: ${payload.totalDispatched.emittedCount} maxEmittedCount: ${payload.totalDispatched.maxEmittedId}`;
+            document.getElementById("provided-count").textContent = `Provided - emittedCount: ${payload.totalProvided.emittedCount} maxEmittedId: ${payload.totalProvided.maxEmittedId} events/sec: ${payload.totalProvided.emissionsPerSec}`;
+            document.getElementById("ingested-count").textContent = `Ingested - emittedCount: ${payload.totalIngested.emittedCount} maxEmittedId: ${payload.totalIngested.maxEmittedId} events/sec: ${payload.totalIngested.emissionsPerSec}`;
+            document.getElementById("transformed-count").textContent = `Transformed - emittedCount: ${payload.totalTransformed.emittedCount} maxEmittedId: ${payload.totalTransformed.maxEmittedId} events/sec: ${payload.totalTransformed.emissionsPerSec}`;
+            document.getElementById("dispatched-count").textContent = `Dispatched - emittedCount: ${payload.totalDispatched.emittedCount} maxEmittedId: ${payload.totalDispatched.maxEmittedId} events/sec: ${payload.totalDispatched.emissionsPerSec}`;
         });
 
         eventSource.onerror = () => {

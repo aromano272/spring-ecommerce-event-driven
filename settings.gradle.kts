@@ -17,6 +17,7 @@ include(
     "order",
     "supplier",
 
+    "provider",
     "ingester",
     "transformer",
     "dispatcher",

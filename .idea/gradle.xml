@@ -4,17 +4,6 @@
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
-        <compositeConfiguration>
-          <compositeBuild compositeDefinitionSource="SCRIPT">
-            <builds>
-              <build path="$PROJECT_DIR$/buildSrc" name="buildSrc">
-                <projects>
-                  <project path="$PROJECT_DIR$/buildSrc" />
-                </projects>
-              </build>
-            </builds>
-          </compositeBuild>
-        </compositeConfiguration>
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
         <option name="gradleHome" value="" />
         <option name="modules">
@@ -22,13 +11,16 @@
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/accounting" />
             <option value="$PROJECT_DIR$/admindashboard" />
-            <option value="$PROJECT_DIR$/buildSrc" />
             <option value="$PROJECT_DIR$/common" />
             <option value="$PROJECT_DIR$/customer" />
+            <option value="$PROJECT_DIR$/dispatcher" />
             <option value="$PROJECT_DIR$/email" />
+            <option value="$PROJECT_DIR$/ingester" />
             <option value="$PROJECT_DIR$/inventory" />
             <option value="$PROJECT_DIR$/order" />
+            <option value="$PROJECT_DIR$/provider" />
             <option value="$PROJECT_DIR$/supplier" />
+            <option value="$PROJECT_DIR$/transformer" />
           </set>
         </option>
       </GradleProjectSettings>

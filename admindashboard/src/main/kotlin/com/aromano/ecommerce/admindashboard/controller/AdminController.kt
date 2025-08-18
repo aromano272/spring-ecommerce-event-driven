@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
-import reactor.core.publisher.Mono.delay
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -43,9 +43,13 @@ class AdminController(
 
     private val emitters = CopyOnWriteArrayList<SseEmitter>()
     private val dispatchMessages = mutableListOf<String>()
-    private var totalIngested: Totals? = null
-    private var totalTransformed: Totals? = null
-    private var totalDispatched: Totals? = null
+    private var getTotalsStart = 0L
+    private var totalProvided: Totals = Totals()
+    private var totalIngested: Totals = Totals()
+    private var totalTransformed: Totals = Totals()
+    private var totalDispatched: Totals = Totals()
+    val dispatchedIds = ConcurrentHashMap.newKeySet<String>()
+
 
     // Buffer for collecting messages before sending them in batches
     private val messageBuffer = CopyOnWriteArrayList<String>()
@@ -72,9 +76,12 @@ class AdminController(
 
     data class SSEPayload(
         val messages: List<String>,
+        val totalProvided: Totals?,
         val totalIngested: Totals?,
         val totalTransformed: Totals?,
         val totalDispatched: Totals?,
+        val totalProvidedCount: Int,
+        val totalDispatchedCount: Int,
     )
 
     private fun sendBatchedMessages() {
@@ -87,11 +94,17 @@ class AdminController(
 
         emitters.forEach { emitter ->
             try {
+                val delta = ((System.currentTimeMillis() - getTotalsStart) / 1000)
+                    .coerceAtLeast(1)
+                    .toInt()
                 val payload = SSEPayload(
                     messages = messagesToSend,
-                    totalIngested = totalIngested,
-                    totalTransformed = totalTransformed,
-                    totalDispatched = totalDispatched,
+                    totalProvided = totalProvided.copy(emissionsPerSec = totalProvided.emittedCount / delta),
+                    totalIngested = totalIngested.copy(emissionsPerSec = totalIngested.emittedCount / delta),
+                    totalTransformed = totalTransformed.copy(emissionsPerSec = totalTransformed.emittedCount / delta),
+                    totalDispatched = totalDispatched.copy(emissionsPerSec = totalDispatched.emittedCount / delta),
+                    totalProvidedCount = totalProvided.emittedCount,
+                    totalDispatchedCount = dispatchedIds.size,
                 )
                 val event = SseEmitter.event()
                     .name("messages")
@@ -108,13 +121,36 @@ class AdminController(
     }
 
     private fun getTotals() {
+        if (getTotalsStart == 0L) getTotalsStart = System.currentTimeMillis()
+        val providerUrl = "http://provider:8084/provider/total"
         val dispatcherUrl = "http://dispatcher:8081/dispatcher/total"
         val ingesterUrl = "http://ingester:8082/ingester/total"
         val transformerUrl = "http://transformer:8083/transformer/total"
         try {
             val start = System.currentTimeMillis()
+            val response = restTemplate.getForEntity(providerUrl, Totals::class.java)
+            response.body?.let {
+                totalProvided = totalProvided.copy(
+                    emittedCount = totalProvided.emittedCount + it.emittedCount,
+                    maxEmittedId = it.maxEmittedId,
+//                    emittedIds = totalProvided.emittedIds + it.emittedIds,
+                )
+            }
+            val delta = System.currentTimeMillis() - start
+            logger.info("provider totals took: ${delta}ms $totalProvided")
+        } catch (e: Exception) {
+            logger.error("Error getting provider totals: ${e.message}")
+        }
+        try {
+            val start = System.currentTimeMillis()
             val response = restTemplate.getForEntity(dispatcherUrl, Totals::class.java)
-            totalDispatched = response.body
+            response.body?.let {
+                totalDispatched = totalDispatched.copy(
+                    emittedCount = totalDispatched.emittedCount + it.emittedCount,
+                    maxEmittedId = it.maxEmittedId,
+//                    emittedIds = totalDispatched.emittedIds + it.emittedIds,
+                )
+            }
             val delta = System.currentTimeMillis() - start
             logger.info("dispatcher totals took: ${delta}ms $totalDispatched")
         } catch (e: Exception) {
@@ -123,7 +159,13 @@ class AdminController(
         try {
             val start = System.currentTimeMillis()
             val response = restTemplate.getForEntity(ingesterUrl, Totals::class.java)
-            totalIngested = response.body
+            response.body?.let {
+                totalIngested = totalIngested.copy(
+                    emittedCount = totalIngested.emittedCount + it.emittedCount,
+                    maxEmittedId = it.maxEmittedId,
+//                    emittedIds = totalIngested.emittedIds + it.emittedIds,
+                )
+            }
             val delta = System.currentTimeMillis() - start
             logger.info("ingester totals took: ${delta}ms $totalIngested")
         } catch (e: Exception) {
@@ -132,7 +174,13 @@ class AdminController(
         try {
             val start = System.currentTimeMillis()
             val response = restTemplate.getForEntity(transformerUrl, Totals::class.java)
-            totalTransformed = response.body
+            response.body?.let {
+                totalTransformed = totalTransformed.copy(
+                    emittedCount = totalTransformed.emittedCount + it.emittedCount,
+                    maxEmittedId = it.maxEmittedId,
+//                    emittedIds = totalTransformed.emittedIds + it.emittedIds,
+                )
+            }
             val delta = System.currentTimeMillis() - start
             logger.info("transformer totals took: ${delta}ms $totalTransformed")
         } catch (e: Exception) {
@@ -208,31 +256,31 @@ class AdminController(
         }
     }
 
-    @PostMapping("/ingester/startingestion")
-    fun startIngesterIngestion(@RequestParam delay: Int): ResponseEntity<String> {
-        logger.info("Starting ingester with delay: $delay")
+    @PostMapping("/provider/start")
+    fun startProvider(@RequestParam delay: Int): ResponseEntity<String> {
+        logger.info("Starting provider with delay: $delay")
 
-        val ingesterUrl = "http://ingester:8082/ingester/start?delay=$delay"
+        val providerUrl = "http://provider:8084/provider/start?delay=$delay"
         try {
-            restTemplate.postForEntity(ingesterUrl, null, String::class.java)
-            return ResponseEntity.ok("ingester start ingestion set to: $delay")
+            restTemplate.postForEntity(providerUrl, null, String::class.java)
+            return ResponseEntity.ok("provider start ingestion set to: $delay")
         } catch (e: Exception) {
-            logger.error("Error setting ingester start ingestion: ${e.message}")
-            return ResponseEntity.badRequest().body("Error setting ingester start ingestion: ${e.message}")
+            logger.error("Error setting provider start ingestion: ${e.message}")
+            return ResponseEntity.badRequest().body("Error setting provider start ingestion: ${e.message}")
         }
     }
 
-    @PostMapping("/ingester/stopingestion")
-    fun stopIngesterIngestion(): ResponseEntity<String> {
-        logger.info("stoping ingester with delay")
+    @PostMapping("/provider/stop")
+    fun stopProvider(): ResponseEntity<String> {
+        logger.info("stoping provider with delay")
 
-        val ingesterUrl = "http://ingester:8082/ingester/stop"
+        val providerUrl = "http://provider:8084/provider/stop"
         try {
-            restTemplate.postForEntity(ingesterUrl, null, String::class.java)
-            return ResponseEntity.ok("ingester stop ingestion")
+            restTemplate.postForEntity(providerUrl, null, String::class.java)
+            return ResponseEntity.ok("provider stop ingestion")
         } catch (e: Exception) {
-            logger.error("Error setting ingester stop ingestion: ${e.message}")
-            return ResponseEntity.badRequest().body("Error setting ingester stop ingestion: ${e.message}")
+            logger.error("Error setting provider stop ingestion: ${e.message}")
+            return ResponseEntity.badRequest().body("Error setting provider stop ingestion: ${e.message}")
         }
     }
 
